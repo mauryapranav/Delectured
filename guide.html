@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guide & Documentation | DeLectured</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Top info strip -->
+    <div class="top-strip">
+        <span>DELECTURED v1.0 · DOCUMENTATION</span>
+        <span style="color:var(--text-tertiary);">CLIENT-SIDE AI ARCHITECTURE</span>
+    </div>
+
+    <!-- Nav -->
+    <nav>
+        <div class="footer-logo" style="margin:0;">DeLectured</div>
+        <div class="nav-links">
+            <a href="index.html">Try It</a>
+            <a href="index.html#how-it-works">How It Works</a>
+            <a href="guide.html" style="color:var(--accent); border-bottom-color:var(--accent);">Guide</a>
+        </div>
+        <div class="nav-controls">
+            <button class="icon-btn" id="theme-toggle" aria-label="Toggle Dark Mode">◑</button>
+        </div>
+    </nav>
+
+    <div class="container" style="padding-top: 4rem; padding-bottom: 4rem;">
+        <h1>Documentation.</h1>
+        <p class="tagline" style="margin-bottom: 4rem;">Everything you need to know about how DeLectured processes, understands, and structures your audio.</p>
+
+        <!-- Getting Started -->
+        <section class="guide-section">
+            <h2>Getting Started</h2>
+            <ul class="step-list">
+                <li class="step-item">
+                    <h3>Get a Groq API Key</h3>
+                    <p>DeLectured runs entirely in your browser using the Groq API for blazing fast inference. Get a free API key at <a href="https://console.groq.com/keys" target="_blank">console.groq.com</a>.</p>
+                </li>
+                <li class="step-item">
+                    <h3>Prepare your audio</h3>
+                    <p>Record your lecture. M4A (voice memo), MP3, and WAV files up to 25MB are supported. If your file is larger, use a free compressor tool online.</p>
+                </li>
+                <li class="step-item">
+                    <h3>Select Language</h3>
+                    <p>DeLectured natively supports mixed-language processing. If your professor mixes Hindi and English (Hinglish), select the "Hindi / Hinglish" option for specialized notes.</p>
+                </li>
+                <li class="step-item">
+                    <h3>Upload & Wait</h3>
+                    <p>Processing typically takes 15-45 seconds depending on lecture length, handled directly via API calls from your browser.</p>
+                </li>
+            </ul>
+        </section>
+
+        <!-- Privacy -->
+        <div class="privacy-box">
+            <h3 style="color: var(--accent); font-family: var(--font-mono); font-size: 14px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem;">Privacy Architecture</h3>
+            <p><strong>Your audio never touches our servers.</strong> DeLectured is a static web application. When you upload a file, it is sent directly from your browser to Groq's secure API endpoints. We have no databases, no user accounts, and no access to your API key or data.</p>
+        </div>
+
+        <!-- Limits -->
+        <section class="guide-section">
+            <h2>Usage & Limits</h2>
+            <table class="comparison-table">
+                <tr>
+                    <th>Parameter</th>
+                    <th>Limit</th>
+                    <th>Note</th>
+                </tr>
+                <tr>
+                    <td class="mono-data">File Size</td>
+                    <td class="mono-data">25 MB</td>
+                    <td>Groq Whisper API hard limit</td>
+                </tr>
+                <tr>
+                    <td class="mono-data">Formats</td>
+                    <td class="mono-data">MP3, M4A, WAV, MP4</td>
+                    <td>Native browser parsing supported</td>
+                </tr>
+                <tr>
+                    <td class="mono-data">API Cost</td>
+                    <td class="mono-data">$0.00</td>
+                    <td>Currently free via Groq Beta limits</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- Features Deep Dive -->
+        <section class="guide-section">
+            <h2>Feature Deep-Dives</h2>
+            
+            <h3 style="margin-top:2rem;">The Two-Stage Pipeline</h3>
+            <p>Unlike standard AI tools that simply run "summarize this text" over a transcript, DeLectured operates like a human note-taker analyzing a room.</p>
+            <p><strong>Stage 1 (Analysis):</strong> A fast, cheap inference call (~300 tokens) reads the raw transcript to identify the domain (e.g., Biology, Economics), structure (Intro, Core, Examples), and explicit emphasis markers ("this is very important").</p>
+            <p><strong>Stage 2 (Structuring):</strong> A second, specialized inference call uses Stage 1's blueprint to extract concepts dynamically, knowing exactly what the professor emphasized.</p>
+
+            <h3 style="margin-top:2rem;">Concept Confidence</h3>
+            <p>Not all topics are covered equally. DeLectured plots a visual confidence map: ●●● means a concept was deeply explained, ●○○ means it was only briefly mentioned. This tells you exactly what you need to look up in the textbook.</p>
+
+            <h3 style="margin-top:2rem;">Exam Signals</h3>
+            <p>A hybrid regex + AI system scans the transcript for explicit and implicit exam hints ("remember this for finals", "यह exam में आएगा"). These are pulled to the very top of your notes.</p>
+        </section>
+
+        <!-- Comparison -->
+        <section class="guide-section">
+            <h2>Why not ChatGPT or Otter.ai?</h2>
+            <table class="comparison-table">
+                <tr>
+                    <th>Feature</th>
+                    <th>Otter / Generic AI</th>
+                    <th>DeLectured</th>
+                </tr>
+                <tr>
+                    <td>Domain Awareness</td>
+                    <td>None. Treats History and CS the same.</td>
+                    <td>Adapts terminology based on auto-detected domain.</td>
+                </tr>
+                <tr>
+                    <td>Note Structure</td>
+                    <td>Chronological bullet points.</td>
+                    <td>Categorized by Concept, Topics, and Key Takeaways.</td>
+                </tr>
+                <tr>
+                    <td>Exam Relevance</td>
+                    <td>Buried in text.</td>
+                    <td>Isolated and highlighted automatically.</td>
+                </tr>
+                <tr>
+                    <td>Hinglish Support</td>
+                    <td>Forces translation to English.</td>
+                    <td>Embraces native language mixing in notes.</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- FAQ -->
+        <section class="guide-section">
+            <h2>FAQ</h2>
+            <div style="margin-bottom: 1.5rem;">
+                <h3 style="font-size: 16px;">What if my recording is longer than 1 hour?</h3>
+                <p>To prevent API timeouts, DeLectured currently limits analysis to the first ~6000 words. For 2-hour seminars, we recommend splitting the audio file.</p>
+            </div>
+            <div style="margin-bottom: 1.5rem;">
+                <h3 style="font-size: 16px;">Why do I need my own API key?</h3>
+                <p>Because DeLectured has no backend and is completely free. Providing your own Groq key allows you to use their extremely fast inference models at no cost to you (within their generous free tier).</p>
+            </div>
+            <div style="margin-bottom: 1.5rem;">
+                <h3 style="font-size: 16px;">Can I save my notes?</h3>
+                <p>Yes. Use the "Download .TXT" or "Print PDF" buttons at the bottom of the notes. Because there is no database, refreshing the page will clear your current notes.</p>
+            </div>
+        </section>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <div>
+            <div class="footer-logo">DeLectured</div>
+            <div>Built by <a href="https://github.com/mauryapranav" target="_blank" rel="noopener">Pranav Kumar Maurya</a></div>
+        </div>
+        <div style="text-align: right;">
+            <div>Groq · Whisper-large-v3 · LLaMA 3.1</div>
+            <div>No audio data stored. Ever.</div>
+        </div>
+    </footer>
+
+    <script>
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            const isDark = document.body.parentElement.getAttribute('data-theme') === 'dark';
+            document.body.parentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+        });
+    </script>
+</body>
+</html>
