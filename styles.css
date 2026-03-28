@@ -23,9 +23,9 @@
 
 [data-theme="dark"] {
   --ink: #F5F0E8;
-  --paper: #F8F7F5;   /* cooler, more neutral */
---paper-2: #F0EEEB;
---paper-3: #E8E5E0;
+  --paper: #0A0A08;
+  --paper-2: #141412;
+  --paper-3: #1A1A18;
   --border: rgba(245,240,232,0.06);
   --border-strong: rgba(245,240,232,0.15);
   --text-primary: #F5F0E8;
