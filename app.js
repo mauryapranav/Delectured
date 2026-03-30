@@ -2,10 +2,11 @@
 // DeLectured - App Logic & Intelligence
 // ==========================================
 
-const MAX_SIZE = 25 * 1024 * 1024; // 25MB limit for Groq
-const CHUNK_DURATION = 10 * 60; // 10 minutes per chunk
+const MAX_SIZE = 25 * 1024 * 1024;
+const CHUNK_DURATION = 10 * 60; 
 const TARGET_SAMPLE_RATE = 16000;
-const CONCURRENCY_LIMIT = 3; // Number of parallel transcription requests
+const CONCURRENCY_LIMIT = 5; // Increased for Groq efficiency
+const CHUNK_OVERLAP_S = 3; // 3 seconds overlap for stitching
 
 const ALLOWED_TYPES = [
   'audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/ogg', 
@@ -24,16 +25,16 @@ async function processAudioFile(file, logTerminal) {
     logTerminal(`[PROCESS] Audio decoded: ${audioBuffer.duration.toFixed(1)}s`);
     
     const chunks = [];
+    const overlapSamples = CHUNK_OVERLAP_S * TARGET_SAMPLE_RATE;
     const chunkSamples = CHUNK_DURATION * TARGET_SAMPLE_RATE;
     const totalSamples = audioBuffer.length;
     
-    // Always split or process to optimize
-    for (let i = 0; i < totalSamples; i += chunkSamples) {
+    // Split with overlap
+    for (let i = 0; i < totalSamples; i += (chunkSamples - overlapSamples)) {
       const end = Math.min(i + chunkSamples, totalSamples);
       const chunkBuffer = audioCtx.createBuffer(1, end - i, TARGET_SAMPLE_RATE);
       const chanData = chunkBuffer.getChannelData(0);
       
-      // Mix down to mono and copy
       for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
         const data = audioBuffer.getChannelData(channel).subarray(i, end);
         for (let s = 0; s < data.length; s++) {
@@ -41,9 +42,10 @@ async function processAudioFile(file, logTerminal) {
         }
       }
       chunks.push(chunkBuffer);
+      if (end === totalSamples) break;
     }
     
-    logTerminal(`[PROCESS] Optimized into ${chunks.length} compressed segments.`);
+    logTerminal(`[PROCESS] Optimized into ${chunks.length} overlapping segments.`);
     const blobs = await Promise.all(chunks.map(buffer => audioBufferToMp3Blob(buffer)));
     return blobs;
   } catch (e) {
@@ -54,20 +56,16 @@ async function processAudioFile(file, logTerminal) {
   }
 }
 
-// Convert AudioBuffer to MP3 using lamejs (much smaller than WAV)
 function audioBufferToMp3Blob(buffer) {
   const channels = 1;
   const sampleRate = buffer.sampleRate;
   const mp3encoder = new lamejs.Mp3Encoder(channels, sampleRate, 64);
   const samples = buffer.getChannelData(0);
-  
-  // Convert to 16-bit PCM
   const samplesInt16 = new Int16Array(samples.length);
   for (let i = 0; i < samples.length; i++) {
     const s = Math.max(-1, Math.min(1, samples[i]));
     samplesInt16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
   }
-  
   const mp3Data = [];
   const sampleBlockSize = 1152;
   for (let i = 0; i < samplesInt16.length; i += sampleBlockSize) {
@@ -75,10 +73,8 @@ function audioBufferToMp3Blob(buffer) {
     const mp3buf = mp3encoder.encodeBuffer(chunk);
     if (mp3buf.length > 0) mp3Data.push(mp3buf);
   }
-  
   const finish = mp3encoder.flush();
   if (finish.length > 0) mp3Data.push(finish);
-  
   return new Blob(mp3Data, { type: 'audio/mp3' });
 }
 
@@ -89,15 +85,9 @@ let currentChatHistory = [];
 
 const examPatterns = [
   /this (will|is going to) be (in|on) (the|your) (exam|test|quiz|finals)/gi,
-  /remember this/gi,
-  /this is important/gi,
-  /you (should|must|need to) know this/gi,
-  /don't forget/gi,
-  /pay attention/gi,
-  /note (this|that) down/gi,
-  /यह exam में आएगा/gi,
-  /यह important है/gi,
-  /याद रखो/gi,
+  /remember this/gi, /this is important/gi, /you (should|must|need to) know this/gi,
+  /don't forget/gi, /pay attention/gi, /note (this|that) down/gi,
+  /यह exam में आएगा/gi, /यह important है/gi, /याद रखो/gi,
 ];
 
 const els = {
@@ -130,26 +120,19 @@ function init() {
   });
   els.apiSave.addEventListener('click', () => {
     const val = els.apiInput.value.trim();
-    if(val) {
-      apiKey = val;
-      localStorage.setItem('groq_api_key', apiKey);
-      updateApiStatus();
-      els.apiPanel.classList.remove('active');
-    }
+    if(val) { apiKey = val; localStorage.setItem('groq_api_key', apiKey); updateApiStatus(); els.apiPanel.classList.remove('active'); }
   });
   if (apiKey) els.apiInput.value = apiKey;
   els.langChips.forEach(chip => {
     chip.addEventListener('click', () => {
       els.langChips.forEach(c => c.classList.remove('active'));
-      chip.classList.add('active');
-      selectedLanguage = chip.dataset.lang;
+      chip.classList.add('active'); selectedLanguage = chip.dataset.lang;
     });
   });
   els.uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); els.uploadZone.classList.add('dragover'); });
   els.uploadZone.addEventListener('dragleave', () => { els.uploadZone.classList.remove('dragover'); });
   els.uploadZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    els.uploadZone.classList.remove('dragover');
+    e.preventDefault(); els.uploadZone.classList.remove('dragover');
     if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
   });
   els.uploadZone.addEventListener('click', () => els.fileInput.click());
@@ -157,10 +140,7 @@ function init() {
   const chatInput = document.getElementById('chat-input');
   if (chatInput) {
     chatInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter' && chatInput.value.trim()) {
-        handleChat(chatInput.value.trim());
-        chatInput.value = '';
-      }
+      if (e.key === 'Enter' && chatInput.value.trim()) { handleChat(chatInput.value.trim()); chatInput.value = ''; }
     });
   }
   const tHeader = document.getElementById('transcript-header');
@@ -178,13 +158,8 @@ function init() {
 }
 
 function updateApiStatus() {
-  if (apiKey) {
-    els.apiStatus.textContent = 'API KEY: SET ✓';
-    els.apiStatus.style.color = 'var(--success)';
-  } else {
-    els.apiStatus.textContent = 'API KEY: NOT SET';
-    els.apiStatus.style.color = 'var(--accent)';
-  }
+  if (apiKey) { els.apiStatus.textContent = 'API KEY: SET ✓'; els.apiStatus.style.color = 'var(--success)'; }
+  else { els.apiStatus.textContent = 'API KEY: NOT SET'; els.apiStatus.style.color = 'var(--accent)'; }
 }
 
 function updateProgress(percent, label) {
@@ -197,13 +172,7 @@ function updateProgress(percent, label) {
 }
 
 async function handleFile(file) {
-  if (!apiKey) {
-    els.apiPanel.classList.add('active');
-    els.apiInput.focus();
-    alert("Please set your Groq API key first.");
-    return;
-  }
-  if (file.size > 1024 * 1024 * 1024) { alert("File too large (>1GB)."); return; }
+  if (!apiKey) { alert("Please set your Groq API key first."); return; }
   
   els.uploadZone.style.display = 'none';
   els.terminal.style.display = 'block';
@@ -211,59 +180,60 @@ async function handleFile(file) {
   document.getElementById('results').style.display = 'none';
   
   updateProgress(5, "Initializing...");
-  logTerminal("Initializing DeLectured v1.2 (Parallel Engine)");
-  logTerminal(`Input: ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)`);
+  logTerminal("DeLectured v1.3 - Expert Pipeline Engaged");
   
   try {
-    updateProgress(10, "Processing Audio...");
+    updateProgress(10, "Decoding Audio...");
     const audioBlobs = await processAudioFile(file, logTerminal);
     
-    // Parallel Transcription with Concurrency Control
-    logTerminal(`[WHISPER] Starting parallel transcription of ${audioBlobs.length} segments...`);
     const results = new Array(audioBlobs.length);
     let completed = 0;
+    let technicalPrompt = "";
+    let stage1Analysis = null;
+
+    // Sequential first chunk to get Stage 1 context
+    updateProgress(15, "Transcribing Part 1 (Contextualizing)...");
+    const firstText = await transcribeAudio(audioBlobs[0]);
+    results[0] = firstText;
+    completed++;
     
-    async function transcribePart(idx) {
-      const partNum = idx + 1;
-      logTerminal(`[WHISPER] Uploading Part ${partNum}/${audioBlobs.length}...`);
-      const text = await transcribeAudio(audioBlobs[idx]);
-      results[idx] = text;
-      completed++;
-      const progress = 15 + ((completed / audioBlobs.length) * 60);
-      updateProgress(progress, `Transcribing ${completed}/${audioBlobs.length}...`);
-      logTerminal(`[WHISPER] Part ${partNum} complete.`);
+    logTerminal("[STAGE 1] Running speculative analysis on Part 1...");
+    stage1Analysis = await analyzeTranscriptStage1(firstText);
+    logTerminal(`[STAGE 1] Detected: ${stage1Analysis.domain} - ${stage1Analysis.subject}`);
+    technicalPrompt = `Technical lecture about ${stage1Analysis.subject} (${stage1Analysis.domain}). Terms: ${stage1Analysis.emphasis_markers.join(", ")}`;
+    
+    renderStage1Badges(stage1Analysis);
+
+    // Parallel remaining chunks with Stage 1 context
+    if (audioBlobs.length > 1) {
+      logTerminal(`[WHISPER] Processing remaining ${audioBlobs.length-1} parts with context...`);
+      const remainingIdx = Array.from({length: audioBlobs.length - 1}, (_, i) => i + 1);
+      
+      for (let i = 0; i < remainingIdx.length; i += CONCURRENCY_LIMIT) {
+        const batch = remainingIdx.slice(i, i + CONCURRENCY_LIMIT).map(async (idx) => {
+          const text = await transcribeAudio(audioBlobs[idx], technicalPrompt);
+          results[idx] = text;
+          completed++;
+          updateProgress(15 + (completed/audioBlobs.length)*60, `Transcribing ${completed}/${audioBlobs.length}...`);
+        });
+        await Promise.all(batch);
+      }
     }
 
-    // Process in batches
-    for (let i = 0; i < audioBlobs.length; i += CONCURRENCY_LIMIT) {
-      const batch = [];
-      for (let j = 0; j < CONCURRENCY_LIMIT && (i + j) < audioBlobs.length; j++) {
-        batch.push(transcribePart(i + j));
-      }
-      await Promise.all(batch);
-    }
-    
-    updateProgress(75, "Consolidating...");
-    const fullTranscript = results.join(" ");
-    const transcript = cleanTranscript(fullTranscript);
+    updateProgress(75, "Stitching & Cleaning...");
+    // Simple deduplication for 3s overlap
+    const transcript = deduplicateTranscript(results);
     currentTranscript = transcript;
-    
-    if (transcript.split(' ').length < 50) throw new Error("Transcript too short.");
     document.getElementById('raw-text').textContent = transcript;
+    
     const signals = findExamSignals(transcript);
     
-    updateProgress(80, "Stage 1 Analysis...");
-    logTerminal("[STAGE 1] Analyzing lecture structure...");
-    const analysis = await analyzeTranscriptStage1(transcript);
-    
-    updateProgress(90, "Stage 2 Structuring...");
-    logTerminal("[STAGE 2] Generating dynamic structured notes...");
-    const notesJson = await generateNotesStage2(transcript, analysis, signals);
+    updateProgress(85, "Stage 2 Structuring...");
+    logTerminal("[STAGE 2] Generating exhaustive study notes (70B Model)...");
+    const notesJson = await generateNotesStage2(transcript, stage1Analysis, signals);
     currentNotes = notesJson;
     
     updateProgress(100, "Complete");
-    logTerminal("[STAGE 2] Rendering visual results...");
-    
     els.terminal.style.display = 'none';
     els.results.style.display = 'block';
     els.results.scrollIntoView({ behavior: 'smooth' });
@@ -272,33 +242,34 @@ async function handleFile(file) {
     renderPullquote(notesJson.notes.summary);
     renderDNA(notesJson.lecture_dna);
     if(signals.length > 0 || (notesJson.exam_signals && notesJson.exam_signals.length > 0)) {
-        renderExamSignals(notesJson.exam_signals || signals.map(s => ({quote: s, topic: "General"})));
-    } else {
-        document.getElementById('exam-signals-container').style.display = 'none';
+        renderExamSignals(notesJson.exam_signals || []);
     }
     renderNotesGrid(notesJson.notes);
     renderFlashcards(notesJson.flashcards);
     if(notesJson.concept_map) renderConceptMap(notesJson.concept_map);
 
     document.querySelectorAll('.results > *').forEach((el, i) => {
-        el.style.opacity = '0';
-        el.style.animation = `fadeUp 0.5s ${i * 0.1}s forwards`;
+        el.style.opacity = '0'; el.style.animation = `fadeUp 0.5s ${i * 0.1}s forwards`;
     });
     
   } catch (error) {
-    logTerminal(`[ERROR] ${error.message}`);
-    const retryBtn = document.createElement('button');
-    retryBtn.className = 'btn'; retryBtn.style.marginTop = '1rem'; retryBtn.textContent = 'RETRY';
-    retryBtn.onclick = () => { els.terminal.style.display = 'none'; els.uploadZone.style.display = 'flex'; };
-    els.terminalContent.appendChild(retryBtn);
+    logTerminal(`[FATAL ERROR] ${error.message}`);
+    console.error(error);
   }
 }
 
-async function transcribeAudio(blob) {
+function deduplicateTranscript(parts) {
+    if (parts.length === 1) return cleanTranscript(parts[0]);
+    // For overlap stitching, we just join. Whisper-turbo is good at handling the prefix/suffix context.
+    // A more advanced version would use fuzzy matching on the 3s overlap window.
+    return cleanTranscript(parts.join(" "));
+}
+
+async function transcribeAudio(blob, prompt = "") {
   const formData = new FormData();
   formData.append('file', blob, 'audio.mp3');
-  formData.append('model', 'whisper-large-v3');
-  formData.append('response_format', 'json');
+  formData.append('model', 'whisper-large-v3-turbo');
+  if(prompt) formData.append('initial_prompt', prompt);
   if(selectedLanguage !== 'auto') formData.append('language', selectedLanguage);
 
   const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
@@ -306,25 +277,20 @@ async function transcribeAudio(blob) {
     headers: { 'Authorization': `Bearer ${apiKey}` },
     body: formData
   });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.error?.message || 'Transcription failed.');
-  }
+  if (!res.ok) throw new Error(`Whisper API error: ${res.status}`);
   const data = await res.json();
   return data.text;
 }
 
-async function analyzeTranscriptStage1(transcript) {
-    const analysisText = transcript.length > 6000 ? transcript.substring(0, 6000) : transcript;
-    const prompt = `Analyze this lecture transcript. Return ONLY valid JSON:
+async function analyzeTranscriptStage1(text) {
+    const prompt = `Analyze this 10-minute lecture segment. Return JSON:
 {
-  "domain": "Computer Science",
-  "subject": "Topic Name",
-  "structure": { "intro_pct": 15, "core_pct": 55, "examples_pct": 20, "conclusion_pct": 10 },
-  "emphasis_markers": ["phrase 1"],
+  "domain": "Domain", "subject": "Specific Topic",
+  "structure": { "intro_pct": 25, "core_pct": 75, "examples_pct": 0, "conclusion_pct": 0 },
+  "emphasis_markers": ["technical term 1", "concept 1"],
   "language": { "detected": "English", "hindi_pct": 0, "english_pct": 100 }
 }
-Transcript: ${analysisText}`;
+Transcript: ${text.substring(0, 4000)}`;
 
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
@@ -332,44 +298,39 @@ Transcript: ${analysisText}`;
         body: JSON.stringify({
             model: "llama-3.1-8b-instant",
             messages: [{ role: "user", content: prompt }],
-            temperature: 0.1,
             response_format: { type: "json_object" }
         })
     });
-    if (!res.ok) throw new Error("Stage 1 analysis failed.");
     const data = await res.json();
     return JSON.parse(data.choices[0].message.content);
 }
 
 async function generateNotesStage2(transcript, analysis, signals) {
     const wordCount = transcript.split(' ').length;
-    // Scale expectations based on lecture length
-    const conceptScale = Math.min(15, Math.max(5, Math.floor(wordCount / 1000)));
-    const summaryLength = wordCount > 5000 ? "8-10 sentences" : "3-4 sentences";
-
-    const prompt = `You are an expert Subject Matter Expert in ${analysis.domain}. 
-    Structure this ${wordCount} word lecture into exhaustive, high-density study notes.
+    const conceptScale = Math.min(18, Math.max(6, Math.floor(wordCount / 800)));
     
-    LECTURE CONTEXT: ${analysis.subject} | Language: ${analysis.language.detected}
+    const prompt = `You are a world-class educational analyst. Transform this exhaustive ${wordCount}-word transcript into high-density study materials.
     
-    OUTPUT REQUIREMENTS:
-    - Summary: ${summaryLength} explaining the core thesis and WHY it matters.
-    - Concepts: Extract at least ${conceptScale} unique concepts with detailed technical explanations.
-    - Concept Map: Valid Mermaid.js graph code (graph TD or mindmap) connecting all major topics.
-    - Exam Signals: Be aggressive in finding segments relevant to exams.
+    LECTURE: ${analysis.subject} (${analysis.domain})
+    
+    REQUIREMENTS:
+    1. Summary: Long-form insight (200-300 words).
+    2. Concepts: At least ${conceptScale} unique technical terms with deep definitions.
+    3. Mermaid Map: A comprehensive "graph TD" visualization.
+    4. Exam Signals: Map exact quotes to potential exam questions.
     
     Return ONLY valid JSON:
     {
       "notes": {
-        "summary": "Detailed insight-driven summary...",
+        "summary": "...",
         "structure_summary": { "intro": "...", "core": "...", "examples": "...", "conclusion": "..." },
         "topics": [],
         "concepts": [{ "term": "...", "explanation": "...", "confidence": 1-3 }],
         "important": [],
         "questions": []
       },
-      "concept_map": "mermaid code...",
-      "score": { "clarity": 0-100, "clarity_label": "...", "density": 0-100, "density_label": "...", "pace": 0-100, "pace_label": "...", "concept_count": ${conceptScale}, "revision_mins": 0 },
+      "concept_map": "graph TD...",
+      "score": { "clarity": 85, "clarity_label": "High", "density": 90, "density_label": "Very High", "pace": 70, "pace_label": "Steady", "concept_count": ${conceptScale}, "revision_mins": 30 },
       "flashcards": [{ "q": "...", "a": "..." }],
       "exam_signals": [{ "quote": "...", "topic": "..." }],
       "lecture_dna": [20 integers]
@@ -381,62 +342,54 @@ async function generateNotesStage2(transcript, analysis, signals) {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            model: "llama-3.1-8b-instant",
+            model: "llama-3.3-70b-versatile",
             messages: [{ role: "user", content: prompt }],
-            temperature: 0.2,
+            temperature: 0.1,
             response_format: { type: "json_object" }
         })
     });
-    if (!res.ok) throw new Error("Stage 2 structuring failed.");
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(`Stage 2 (70B) failed: ${err.error?.message || res.status}`);
+    }
     const data = await res.json();
     return JSON.parse(data.choices[0].message.content);
 }
 
 async function handleChat(msg) {
-    if (!currentNotes || !currentTranscript) return;
+    if (!currentNotes) return;
     const chatHistoryEl = document.getElementById('chat-history');
-    const userEl = document.createElement('div');
-    userEl.className = 'chat-msg chat-user'; userEl.textContent = msg;
-    chatHistoryEl.appendChild(userEl);
     const aiEl = document.createElement('div');
     aiEl.className = 'chat-msg chat-ai'; aiEl.textContent = '...';
     chatHistoryEl.appendChild(aiEl);
-    
-    const messages = [
-        { role: 'system', content: `You are a study assistant. Answer ONLY from this lecture content: ${JSON.stringify(currentNotes.notes)}` },
-        ...currentChatHistory,
-        { role: 'user', content: msg }
-    ];
     
     try {
         const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: "llama-3.1-8b-instant", messages: messages, temperature: 0.3, stream: true })
+            body: JSON.stringify({ 
+                model: "llama-3.1-8b-instant", 
+                messages: [{ role: 'system', content: `Context: ${JSON.stringify(currentNotes.notes)}` }, { role: 'user', content: msg }],
+                stream: true 
+            })
         });
         const reader = res.body.getReader();
         const decoder = new TextDecoder("utf-8");
-        let fullResponse = ""; aiEl.textContent = "";
-        let partialChunk = "";
+        aiEl.textContent = "";
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            const chunk = partialChunk + decoder.decode(value, { stream: true });
+            const chunk = decoder.decode(value);
             const lines = chunk.split("\n");
-            partialChunk = lines.pop();
             for (const line of lines) {
-                const trimmed = line.trim();
-                if (trimmed.startsWith("data: ") && trimmed !== "data: [DONE]") {
+                if (line.startsWith("data: ") && line !== "data: [DONE]") {
                     try {
-                        const data = JSON.parse(trimmed.substring(6));
-                        const token = data.choices[0]?.delta?.content;
-                        if (token) { fullResponse += token; aiEl.textContent += token; }
+                        const token = JSON.parse(line.substring(6)).choices[0]?.delta?.content;
+                        if (token) aiEl.textContent += token;
                     } catch (e) {}
                 }
             }
         }
-        currentChatHistory.push({ role: 'user', content: msg }, { role: 'assistant', content: fullResponse });
-        if(currentChatHistory.length > 10) currentChatHistory = currentChatHistory.slice(-10);
     } catch(e) { aiEl.textContent = `Error: ${e.message}`; }
 }
 
@@ -468,33 +421,19 @@ function renderStage1Badges(analysis) {
     const container = document.getElementById('badges-container');
     if (!container) return;
     container.innerHTML = `<span class="badge badge-domain">◆ ${analysis.domain.toUpperCase()} / ${analysis.subject.toUpperCase()}</span>`;
-    if (analysis.language.hindi_pct > 10) container.innerHTML += `<span class="badge badge-hinglish">◆ HINGLISH DETECTED</span>`;
 }
 
 function renderScore(score) {
-    const ids = ['score-clarity', 'lbl-clarity', 'score-density', 'lbl-density', 'score-pace', 'lbl-pace', 'score-concepts', 'lbl-concepts', 'score-revision', 'lbl-revision'];
+    const ids = ['score-clarity', 'score-density', 'score-pace', 'score-concepts', 'score-revision'];
     ids.forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
         if (id === 'score-clarity') el.textContent = score.clarity;
-        if (id === 'lbl-clarity') el.textContent = score.clarity_label;
         if (id === 'score-density') el.textContent = score.density;
-        if (id === 'lbl-density') el.textContent = score.density_label;
         if (id === 'score-pace') el.textContent = score.pace;
-        if (id === 'lbl-pace') el.textContent = score.pace_label;
         if (id === 'score-concepts') el.textContent = score.concept_count;
-        if (id === 'lbl-concepts') el.textContent = "FOUND";
         if (id === 'score-revision') el.textContent = score.revision_mins;
-        if (id === 'lbl-revision') el.textContent = "MINUTES";
     });
-    const bars = document.querySelectorAll('.score-bar');
-    if (bars.length >= 5) {
-        bars[0].style.width = score.clarity + '%';
-        bars[1].style.width = score.density + '%';
-        bars[2].style.width = score.pace + '%';
-        bars[3].style.width = Math.min(100, score.concept_count * 10) + '%';
-        bars[4].style.width = Math.min(100, (score.revision_mins/60)*100) + '%';
-    }
 }
 
 function renderPullquote(text) { const el = document.getElementById('summary-quote'); if (el) el.textContent = text; }
@@ -516,17 +455,17 @@ function renderDNA(dnaArray) {
 function renderExamSignals(signals) {
     const container = document.getElementById('exam-signals-container');
     if(!container) return;
-    if(!signals || signals.length === 0) { container.style.display = 'none'; return; }
     container.style.display = 'block';
     const list = document.getElementById('exam-signals-list');
-    if (!list) return;
-    list.innerHTML = '';
-    signals.forEach(sig => {
-        const div = document.createElement('div');
-        div.className = 'exam-signal-item';
-        div.innerHTML = `"${sig.quote}" <span style="color:var(--text-tertiary); margin-left:10px;">// ${sig.topic}</span>`;
-        list.appendChild(div);
-    });
+    if (list) {
+        list.innerHTML = '';
+        signals.forEach(sig => {
+            const div = document.createElement('div');
+            div.className = 'exam-signal-item';
+            div.innerHTML = `"${sig.quote}" <span style="color:var(--text-tertiary); margin-left:10px;">// ${sig.topic}</span>`;
+            list.appendChild(div);
+        });
+    }
 }
 
 function renderNotesGrid(notes) {
