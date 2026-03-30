@@ -1,5 +1,5 @@
 // ==========================================
-// DeLectured v1.5 - Restoration & Excellence
+// DeLectured v1.6 - Expert Finality
 // ==========================================
 
 const MAX_SIZE = 25 * 1024 * 1024;
@@ -74,12 +74,6 @@ let currentTranscript = '';
 let currentNotes = null;
 let currentChatHistory = [];
 
-const examPatterns = [
-  /this (will|is going to) be (in|on) (the|your) (exam|test|quiz|finals)/gi,
-  /remember this/gi, /this is important/gi, /you (should|must|need to) know this/gi,
-  /don't forget/gi, /pay attention/gi, /note (this|that) down/gi,
-];
-
 const els = {
   themeToggle: document.getElementById('theme-toggle'),
   apiToggle: document.getElementById('api-key-toggle'),
@@ -93,7 +87,9 @@ const els = {
   terminalContent: document.getElementById('terminal-content'),
   results: document.getElementById('results'),
   langChips: document.querySelectorAll('.lang-chip'),
-  refreshFlashcards: document.getElementById('btn-refresh-flashcards')
+  refreshFlashcards: document.getElementById('btn-refresh-flashcards'),
+  processAnother: document.getElementById('btn-process-another'),
+  downloadBtn: document.getElementById('btn-download')
 };
 
 let selectedLanguage = 'en';
@@ -136,8 +132,16 @@ function init() {
         els.refreshFlashcards.disabled = true;
         const newCards = await refreshFlashcards(currentTranscript);
         renderFlashcards(newCards);
-        els.refreshFlashcards.textContent = "↻ REFRESH SET";
+        els.refreshFlashcards.textContent = "↻ REFRESH";
         els.refreshFlashcards.disabled = false;
+    });
+  }
+
+  if (els.processAnother) {
+    els.processAnother.addEventListener('click', () => {
+        if (confirm("Wait! Have you saved your notes? Starting a new lecture will clear current results.")) {
+            location.reload();
+        }
     });
   }
 
@@ -157,8 +161,7 @@ function init() {
   }
   const printBtn = document.getElementById('btn-print');
   if (printBtn) printBtn.addEventListener('click', () => window.print());
-  const dlBtn = document.getElementById('btn-download');
-  if (dlBtn) dlBtn.addEventListener('click', downloadNotes);
+  if (els.downloadBtn) els.downloadBtn.addEventListener('click', downloadFullReport);
 }
 
 function updateApiStatus() {
@@ -183,7 +186,7 @@ async function handleFile(file) {
   document.getElementById('results').style.display = 'none';
   
   updateProgress(5, "Starting...");
-  logTerminal("DeLectured v1.5 - Restoration Engine Active");
+  logTerminal("DeLectured v1.6 - Unified Expert Engine");
   
   try {
     const audioBlobs = await processAudioFile(file);
@@ -197,7 +200,7 @@ async function handleFile(file) {
         batch.push((async () => {
           results[idx] = await transcribeAudio(audioBlobs[idx]);
           completed++;
-          logTerminal(`[2/5] TRANSCRIBING LECTURE: Received part ${completed}/${audioBlobs.length}...`, true);
+          logTerminal(`[2/5] TRANSCRIBING LECTURE: Part ${completed}/${audioBlobs.length} received`, true);
           updateProgress(20 + (completed/audioBlobs.length)*50, `Transcribing...`);
         })());
       }
@@ -214,8 +217,7 @@ async function handleFile(file) {
     
     updateProgress(85, "Intelligence...");
     logTerminal("[4/5] GENERATING HIGH-DENSITY STUDY GUIDE (70B)");
-    const signals = findExamSignals(fullTranscript);
-    const notesJson = await generateNotesStage2(fullTranscript, analysis, signals);
+    const notesJson = await generateNotesStage2(fullTranscript, analysis);
     currentNotes = notesJson;
     
     updateProgress(95, "Rendering...");
@@ -228,15 +230,12 @@ async function handleFile(file) {
     renderScore(notesJson.score);
     renderPullquote(notesJson.notes?.summary || "");
     renderDNA(notesJson.lecture_dna || Array(20).fill(5));
-    if(signals.length > 0 || (notesJson.exam_signals && notesJson.exam_signals.length > 0)) {
-        renderExamSignals(notesJson.exam_signals || []);
-    }
     renderNotesGrid(notesJson.notes);
     renderFlashcards(notesJson.flashcards);
     if(notesJson.concept_map) renderConceptMap(notesJson.concept_map);
 
     document.querySelectorAll('.results > *').forEach((el, i) => {
-        el.style.opacity = '0'; el.style.animation = `fadeUp 0.5s ${i * 0.1}s forwards`;
+        el.style.opacity = '0'; el.style.animation = `fadeUp 0.5s ${i * 0.1} forwards`;
     });
     updateProgress(100, "Done");
   } catch (error) {
@@ -269,7 +268,7 @@ async function analyzeTranscriptStage1(text) {
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
             model: "llama-3.1-8b-instant",
-            messages: [{ role: "user", content: `Analyze this transcript and return JSON: { "domain": "...", "subject": "..." }. Transcript: ${text.substring(0, 5000)}` }],
+            messages: [{ role: "user", content: `Analyze domain and subject. JSON: { "domain": "...", "subject": "..." }. Transcript: ${text.substring(0, 5000)}` }],
             response_format: { type: "json_object" }
         })
     });
@@ -277,44 +276,33 @@ async function analyzeTranscriptStage1(text) {
     return JSON.parse(data.choices[0].message.content);
 }
 
-async function generateNotesStage2(transcript, analysis, signals) {
+async function generateNotesStage2(transcript, analysis) {
     const wordCount = transcript.split(' ').length;
-    const prompt = `You are a world-class Subject Matter Expert in ${analysis.domain}.
-    
+    const prompt = `You are a Subject Matter Expert in ${analysis.domain}.
     TASK: Transform this ${wordCount}-word transcript into an EXHAUSTIVE, high-density study guide.
-    
     STRICT REQUIREMENTS:
-    1. SUMMARY: Provide a deep, 400-500 word technical insight. Do not simplify.
-    2. CONCEPTS: Extract at least 15-20 unique concepts with deep academic definitions.
-    3. CONCEPT MAP: Return complex Mermaid.js graph TD code with logical relationships.
-    
+    1. SUMMARY: Provide a deep, 500+ word technical insight explaining the core thesis.
+    2. CONCEPTS: Extract at least 20 technical concepts with detailed academic definitions.
+    3. CONCEPT MAP: Return complex Mermaid.js graph TD code.
     Return ONLY valid JSON:
     {
       "notes": {
-        "summary": "Full length detailed analysis...",
-        "topics": ["Major Topic 1", "..."],
-        "concepts": [{ "term": "...", "explanation": "Deep detailed technical definition...", "confidence": 1-3 }],
-        "important": ["Crucial insight 1", "..."],
+        "summary": "Full detailed analysis (500+ words)...",
+        "topics": [],
+        "concepts": [{ "term": "...", "explanation": "Deep definition...", "confidence": 1-3 }],
+        "important": [],
         "structure_summary": { "intro": "...", "core": "...", "examples": "...", "conclusion": "..." }
       },
-      "concept_map": "graph TD\\n  A((Concept)) -- defines --> B((Concept))\\n...",
-      "score": { "clarity": 85, "density": 95, "pace": 70, "concept_count": 15, "revision_mins": 45 },
+      "concept_map": "graph TD\\n...",
+      "score": { "clarity": 85, "density": 95, "pace": 70, "concept_count": 20, "revision_mins": 60 },
       "flashcards": [{ "q": "...", "a": "..." }],
-      "exam_signals": [{ "quote": "...", "topic": "..." }],
       "lecture_dna": [20 integers]
     }
-    
     Transcript: ${transcript}`;
-    
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            model: "llama-3.3-70b-versatile",
-            messages: [{ role: "user", content: prompt }],
-            temperature: 0.1,
-            response_format: { type: "json_object" }
-        })
+        body: JSON.stringify({ model: "llama-3.3-70b-versatile", messages: [{ role: "user", content: prompt }], temperature: 0.1, response_format: { type: "json_object" } })
     });
     const data = await res.json();
     return JSON.parse(data.choices[0].message.content);
@@ -326,7 +314,7 @@ async function refreshFlashcards(transcript) {
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
             model: "llama-3.1-8b-instant",
-            messages: [{ role: "user", content: `Generate 6 diverse active recall flashcards from this transcript. JSON: {"flashcards": [{"q": "...", "a": "..."}]}. Transcript: ${transcript.substring(0, 15000)}` }],
+            messages: [{ role: "user", content: `Generate 6 recall flashcards. JSON: {"flashcards": [{"q": "...", "a": "..."}]}. Transcript: ${transcript.substring(0, 15000)}` }],
             response_format: { type: "json_object" }
         })
     });
@@ -344,11 +332,7 @@ async function handleChat(msg) {
         const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                model: "llama-3.1-8b-instant", 
-                messages: [{ role: 'system', content: `Context: ${JSON.stringify(currentNotes.notes)}` }, { role: 'user', content: msg }],
-                stream: true 
-            })
+            body: JSON.stringify({ model: "llama-3.1-8b-instant", messages: [{ role: 'system', content: `Context: ${JSON.stringify(currentNotes.notes)}` }, { role: 'user', content: msg }], stream: true })
         });
         const reader = res.body.getReader();
         const decoder = new TextDecoder("utf-8");
@@ -376,79 +360,52 @@ function logTerminal(msg, update = false) {
   els.terminal.scrollTop = els.terminal.scrollHeight;
 }
 
-function findExamSignals(text) {
-  let found = [];
-  examPatterns.forEach(regex => {
-    let match;
-    while ((match = regex.exec(text)) !== null) {
-      const start = Math.max(0, match.index - 50);
-      const end = Math.min(text.length, match.index + match[0].length + 50);
-      found.push(text.substring(start, end).trim());
-    }
-  });
-  return found;
-}
-
 function renderStage1Badges(analysis) {
     const container = document.getElementById('badges-container');
     if (!container) return;
-    container.innerHTML = `<span class="badge badge-domain">◆ ${analysis.domain.toUpperCase()}</span>`;
+    container.innerHTML = `<span class="badge">◆ ${analysis.domain.toUpperCase()}</span><span class="badge">◆ ${analysis.subject.toUpperCase()}</span>`;
 }
 
 function renderScore(score) {
-    const ids = ['score-clarity', 'score-density', 'score-pace', 'score-concepts', 'score-revision'];
-    ids.forEach(id => {
-        const el = document.getElementById(id);
-        if (!el || !score) return;
-        if (id === 'score-clarity') el.textContent = score.clarity || "--";
-        if (id === 'score-density') el.textContent = score.density || "--";
-        if (id === 'score-pace') el.textContent = score.pace || "--";
-        if (id === 'score-concepts') el.textContent = score.concept_count || "--";
-        if (id === 'score-revision') el.textContent = score.revision_mins || "--";
-    });
+    if (!score) return;
+    document.getElementById('score-clarity').textContent = score.clarity || "--";
+    document.getElementById('score-density').textContent = score.density || "--";
+    document.getElementById('score-pace').textContent = score.pace || "--";
+    document.getElementById('score-concepts').textContent = score.concept_count || "--";
+    document.getElementById('score-revision').textContent = score.revision_mins || "--";
 }
 
-function renderPullquote(text) { const el = document.getElementById('summary-quote'); if (el) el.textContent = text; }
+function renderPullquote(text) { document.getElementById('summary-quote').textContent = text; }
 
 function renderDNA(dnaArray) {
     const container = document.getElementById('dna-bars');
     if (!container || !dnaArray) return;
     container.innerHTML = '';
-    dnaArray.forEach((val, i) => {
+    dnaArray.forEach(val => {
         const bar = document.createElement('div');
         bar.className = 'dna-bar';
-        bar.style.opacity = (val / 10).toString();
         bar.style.height = (val / 10) * 100 + '%'; 
+        bar.style.opacity = (val / 10);
         container.appendChild(bar);
     });
-}
-
-function renderExamSignals(signals) {
-    const container = document.getElementById('exam-signals-container');
-    if(!container) return;
-    container.style.display = 'block';
-    const list = document.getElementById('exam-signals-list');
-    if (list) {
-        list.innerHTML = '';
-        signals.forEach(sig => {
-            const div = document.createElement('div');
-            div.className = 'exam-signal-item';
-            div.textContent = `"${sig?.quote || ''}" // ${sig?.topic || ''}`;
-            list.appendChild(div);
-        });
-    }
 }
 
 function renderNotesGrid(notes) {
     const topicsCol = document.getElementById('col-topics');
     const conceptsCol = document.getElementById('col-concepts');
     if (topicsCol && notes?.topics) {
-        topicsCol.innerHTML = '<div class="notes-col-header">Topics & Takeaways</div>';
-        notes.topics.forEach(t => { const d = document.createElement('div'); d.className='notes-item'; d.innerHTML=`<strong>→ ${t}</strong>`; topicsCol.appendChild(d); });
-        if(notes.important) notes.important.forEach(i => { const d = document.createElement('div'); d.className='notes-item'; d.textContent=i; topicsCol.appendChild(d); });
+        topicsCol.innerHTML = '<div class="notes-col-header">TOPICS & KEY TAKEAWAYS</div>';
+        notes.topics.forEach(t => { 
+            const d = document.createElement('div'); d.className='notes-item'; 
+            d.innerHTML=`<strong>→ ${t}</strong>`; topicsCol.appendChild(d); 
+        });
+        if(notes.important) notes.important.forEach(i => {
+            const d = document.createElement('div'); d.className='notes-item';
+            d.textContent = i; topicsCol.appendChild(d);
+        });
     }
     if (conceptsCol && notes?.concepts) {
-        conceptsCol.innerHTML = '<div class="notes-col-header">Technical Concepts</div>';
+        conceptsCol.innerHTML = '<div class="notes-col-header">TECHNICAL CONCEPTS</div>';
         notes.concepts.forEach(c => {
             const d = document.createElement('div'); d.className='notes-item';
             d.innerHTML = `<div class="concept-header"><strong>${c.term || ''}</strong></div><div style="font-size:13px; color:var(--text-secondary)">${c.explanation || ''}</div>`;
@@ -464,14 +421,14 @@ function renderConceptMap(mermaidCode) {
     container.style.display = 'block';
     target.innerHTML = mermaidCode;
     target.removeAttribute('data-processed');
-    setTimeout(() => { if (typeof mermaid !== 'undefined') mermaid.contentLoaded(); }, 100);
+    setTimeout(() => { if (typeof mermaid !== 'undefined') mermaid.contentLoaded(); }, 200);
 }
 
 function renderFlashcards(cards) {
     const container = document.getElementById('flashcards-grid');
     if (!container || !cards) return;
     container.innerHTML = '';
-    cards.forEach((card, i) => {
+    cards.forEach(card => {
         const div = document.createElement('div');
         div.className = 'flashcard';
         div.innerHTML = `<div class="flashcard-inner"><div class="flashcard-front"><div class="fc-q-prefix">Q:</div><div class="fc-text">${card?.q || ''}</div></div><div class="flashcard-back"><div class="fc-a-prefix">A:</div><div class="fc-text">${card?.a || ''}</div></div></div>`;
@@ -480,12 +437,22 @@ function renderFlashcards(cards) {
     });
 }
 
-function downloadNotes() {
-    if(!currentNotes) return;
-    let text = `DELECTURED NOTES\n\nSUMMARY\n${currentNotes.notes?.summary || ''}\n\n`;
+function downloadFullReport() {
+    if(!currentNotes || !currentTranscript) return;
+    let text = `DELECTURED v1.6 - FULL LECTURE REPORT\n`;
+    text += `=========================================\n\n`;
+    text += `SUMMARY:\n${currentNotes.notes?.summary || ''}\n\n`;
+    text += `INTELLIGENCE SCORES:\n`;
+    text += `- Clarity: ${currentNotes.score?.clarity}/100\n`;
+    text += `- Density: ${currentNotes.score?.density}/100\n\n`;
+    text += `TECHNICAL CONCEPTS:\n`;
+    currentNotes.notes?.concepts?.forEach(c => { text += `- ${c.term}: ${c.explanation}\n`; });
+    text += `\nFULL TRANSCRIPTION:\n`;
+    text += `-----------------------------------------\n`;
+    text += currentTranscript;
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = 'notes.txt'; a.click();
+    const a = document.createElement('a'); a.href = url; a.download = 'DeLectured_Report.txt'; a.click();
 }
 
 document.addEventListener('DOMContentLoaded', init);

@@ -7,186 +7,119 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <!-- 1. Top info strip -->
     <div class="top-strip fade-up">
-        <span>DELECTURED v1.5 · WHISPER-TURBO · LLAMA-3.3-70B</span>
+        <span>DELECTURED v1.6 · WHISPER-TURBO · LLAMA-3.3-70B</span>
         <span id="api-status">API KEY: NOT SET</span>
     </div>
 
-    <!-- 2. API key panel -->
     <div class="api-panel" id="api-panel">
         <label class="label">Set Groq API Key (Stored locally)</label>
         <div class="api-input-group">
             <input type="password" id="api-input" class="api-input" placeholder="gsk_...">
             <button class="btn" id="api-save">Save Key</button>
         </div>
-        <div style="margin-top: 1rem; color: var(--text-tertiary);">Get a free key at <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com</a></div>
     </div>
 
-    <!-- 3. Nav -->
-    <nav class="fade-up" style="animation-delay: 0.1s;">
+    <nav class="fade-up">
         <div class="footer-logo" style="margin:0;">DeLectured</div>
         <div class="nav-links">
             <a href="index.html">Try It</a>
-            <a href="#how-it-works">How It Works</a>
             <a href="guide.html">Guide</a>
         </div>
         <div class="nav-controls">
-            <button class="icon-btn" id="theme-toggle" aria-label="Toggle Dark Mode">◑</button>
+            <button class="icon-btn" id="theme-toggle">◑</button>
             <button class="btn" id="api-key-toggle">API Key</button>
         </div>
     </nav>
 
-    <!-- 4. Hero section -->
-    <section class="hero fade-up" style="animation-delay: 0.2s;">
+    <section class="hero fade-up">
         <div class="container hero-grid">
             <div class="hero-content">
-                <h1>
-                    Every Lecture.<br>
-                    Every Word.<br>
-                    Structured.
-                </h1>
-                <p class="tagline">v1.5 Restoration Engine uses LLaMA 3.3 70B to produce exhaustive, high-density study materials with dynamic concept maps and responsive lecture DNA.</p>
-
-                <table class="comparison-table" style="max-width: 600px; margin-top: 2rem;">
-                    <tr>
-                        <th>Generic AI (ChatGPT/Otter)</th>
-                        <th>DeLectured v1.5 Expert</th>
-                    </tr>
-                    <tr>
-                        <td>Fixed-length short summaries</td>
-                        <td>Dynamic scaling (300-500 words)</td>
-                    </tr>
-                    <tr>
-                        <td>Flat bullet points</td>
-                        <td>Dynamic Flowchart Visualizations</td>
-                    </tr>
-                </table>
-
+                <h1>Every Lecture.<br>Structured.</h1>
+                <p class="tagline">v1.6 Expert uses LLaMA 3.3 70B to transform raw audio into exhaustive, professional study materials.</p>
                 <div class="lang-selector">
-                    <span class="label" style="margin-right:1rem;">Audio Language:</span>
                     <span class="lang-chip active" data-lang="en">English</span>
                     <span class="lang-chip" data-lang="hi">Hindi / Hinglish</span>
                     <span class="lang-chip" data-lang="auto">Auto-detect</span>
                 </div>
             </div>
-            
-            <div class="hero-visual-wrapper" style="display: flex; flex-direction: column; gap: 2rem; align-items: center;">
-                <div class="hero-visual">
-                    <div class="circle-visual"></div>
-                    <div style="font-family: var(--font-mono); font-size: 10px; color: var(--accent); position: absolute; bottom: 1rem; right: 1rem; text-align: right;">
-                        // ENGINE READY<br>
-                        // LLAMA-3.3-70B ACTIVE
-                    </div>
-                </div>
-                <a href="#upload-section" class="btn primary-btn" style="text-decoration:none; display:inline-block; width: 100%; text-align: center;">Start Structuring ?</a>
+            <div class="hero-visual-wrapper">
+                <div class="hero-visual"><div class="circle-visual"></div></div>
+                <a href="#upload-section" class="btn primary-btn" style="text-decoration:none;">Start Structuring</a>
             </div>
         </div>
     </section>
 
-<!-- 5. Upload & How It Works section -->
-    <section id="upload-section" class="full-page-section fade-up" style="animation-delay: 0.3s;">
+    <section id="upload-section" class="full-page-section">
         <div class="container upload-page-grid">
             <div class="upload-col">
-                <h2 style="margin-bottom:2rem;">Upload Audio.</h2>
-                <p class="tagline" style="margin-bottom:2rem; font-size:1rem;">Up to 1GB supported. Parallel Whisper-Turbo engine engaged.</p>
-                
-                <div class="upload-zone" id="upload-zone" style="margin: 0 0 2rem 0; width: 100%;">
+                <h2 style="margin-bottom:1rem;">Upload.</h2>
+                <div class="upload-zone" id="upload-zone">
                     <div class="upload-num">01</div>
                     <div class="upload-content">
-                        <div class="upload-instr">Drop lecture audio file here or click to browse</div>
+                        <div class="upload-instr">Drop audio here or click</div>
                         <div class="upload-tags">
-                            <span class="upload-tag">MP3</span>
-                            <span class="upload-tag">M4A</span>
-                            <span class="upload-tag">WAV</span>
-                            <span class="upload-tag">MP4</span>
-                            <span class="upload-tag">AAC</span>
-                            <span class="upload-tag" style="border:none; background:transparent;">MAX 1GB</span>
+                            <span class="upload-tag">MP3 / WAV / M4A</span>
+                            <span class="upload-tag" style="border:none;">MAX 1GB</span>
                         </div>
                     </div>
                 </div>
                 <input type="file" id="file-input" class="file-input" accept="audio/*,video/mp4">
 
-                <!-- 6. Processing terminal -->
                 <div class="terminal" id="terminal">
                     <div class="progress-container" id="progress-container" style="display:none; margin-bottom: 1.5rem;">
                         <div class="progress-label" id="progress-label">INITIALIZING...</div>
-                        <div class="progress-bar-bg">
-                            <div class="progress-bar-fill" id="progress-bar-fill"></div>
-                        </div>
+                        <div class="progress-bar-bg"><div class="progress-bar-fill" id="progress-bar-fill"></div></div>
                     </div>
                     <div id="terminal-content"></div>
                 </div>
             </div>
             
             <div class="how-it-works-col">
-                <h2 style="margin-bottom:2rem;">Expert Engine</h2>
+                <h2>The Process</h2>
                 <ul class="step-list">
-                    <li class="step-item">
-                        <h3>Parallel Whisper-Turbo</h3>
-                        <p>Audio is processed using Groq's high-speed API. We automatically chunk large lectures and optimize audio quality locally.</p>
-                    </li>
-                    <li class="step-item">
-                        <h3>High-Density Intelligence</h3>
-                        <p>Our Stage 2 pass uses LLaMA 3.3 70B to extract deep insights, generating exhaustive technical summaries and complex concept maps.</p>
-                    </li>
+                    <li class="step-item"><h3>Parallel Whisper</h3><p>Fast, high-fidelity transcription.</p></li>
+                    <li class="step-item"><h3>70B Intelligence</h3><p>Deep academic structuring.</p></li>
                 </ul>
             </div>
         </div>
     </section>
 
-    <!-- 7. Results -->
     <section class="results container" id="results">
-        
+        <!-- Badges & Scores -->
         <div class="result-card">
             <div id="badges-container" style="margin-bottom: 1rem;"></div>
+            <div class="label" style="margin-bottom:1.5rem;">INTELLIGENCE SCORES</div>
             <div class="score-strip">
-                <div class="score-box">
-                    <div class="label">CLARITY</div>
-                    <div class="score-num" id="score-clarity">--</div>
-                </div>
-                <div class="score-box">
-                    <div class="label">DENSITY</div>
-                    <div class="score-num" id="score-density">--</div>
-                </div>
-                <div class="score-box">
-                    <div class="label">PACE</div>
-                    <div class="score-num" id="score-pace">--</div>
-                </div>
-                <div class="score-box">
-                    <div class="label">CONCEPTS</div>
-                    <div class="score-num" id="score-concepts">--</div>
-                </div>
-                <div class="score-box">
-                    <div class="label">REVISION</div>
-                    <div class="score-num" id="score-revision">--</div>
-                </div>
+                <div class="score-box"><div class="label">CLARITY</div><div class="score-num" id="score-clarity">--</div></div>
+                <div class="score-box"><div class="label">DENSITY</div><div class="score-num" id="score-density">--</div></div>
+                <div class="score-box"><div class="label">PACE</div><div class="score-num" id="score-pace">--</div></div>
+                <div class="score-box"><div class="label">CONCEPTS</div><div class="score-num" id="score-concepts">--</div></div>
+                <div class="score-box"><div class="label">REVISION</div><div class="score-num" id="score-revision">--</div></div>
             </div>
         </div>
 
+        <!-- Summary -->
         <div class="result-card">
-            <div class="pullquote" id="summary-quote" style="margin:0;"></div>
+            <div class="label" style="margin-bottom:1rem;">EXHAUSTIVE SUMMARY</div>
+            <div class="pullquote" id="summary-quote"></div>
         </div>
 
+        <!-- DNA -->
         <div class="result-card">
-            <div class="dna-section">
-                <div class="label">LECTURE DNA — CONCEPT DENSITY HEATMAP</div>
-                <div class="dna-bars" id="dna-bars"></div>
-            </div>
+            <div class="label">LECTURE DNA — CONCEPT DENSITY HEATMAP</div>
+            <div class="dna-bars" id="dna-bars"></div>
         </div>
 
+        <!-- Mermaid -->
         <div class="result-card" id="concept-map-container" style="display:none;">
-            <div class="label" style="margin-bottom: 2rem;">CONCEPT VISUALIZATION</div>
-            <div id="concept-map" class="mermaid" style="background: white; padding: 2rem; border-radius: 4px; border: 1px solid var(--border);"></div>
-        </div>
-
-        <div class="result-card" id="exam-signals-container" style="display:none;">
-            <div class="exam-signals" style="margin:0; border:none; background:transparent; padding:0;">
-                <div class="exam-signal-header"><span>⚠ EXAM SIGNALS DETECTED</span></div>
-                <div id="exam-signals-list"></div>
+            <div class="label" style="margin-bottom: 2rem;">CONCEPT RELATIONSHIP MAP</div>
+            <div id="concept-map-wrapper" style="width:100%; overflow:auto; background:white; padding:1rem; border:1px solid var(--border);">
+                <div id="concept-map" class="mermaid"></div>
             </div>
         </div>
 
+        <!-- Notes Grid -->
         <div class="result-card">
             <div class="notes-grid">
                 <div id="col-topics"></div>
@@ -194,65 +127,51 @@
             </div>
         </div>
 
+        <!-- Flashcards -->
         <div class="result-card">
-            <div class="flashcards-section" style="margin:0;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-                    <div class="label">ACTIVE RECALL FLASHCARDS</div>
-                    <button class="btn" id="btn-refresh-flashcards" style="font-size: 10px; padding: 0.3rem 0.8rem;">↻ REFRESH SET</button>
-                </div>
-                <div class="flashcards-grid" id="flashcards-grid"></div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <div class="label">ACTIVE RECALL FLASHCARDS</div>
+                <button class="btn" id="btn-refresh-flashcards">↻ REFRESH</button>
+            </div>
+            <div class="flashcards-grid" id="flashcards-grid"></div>
+        </div>
+
+        <!-- Annotations -->
+        <div class="result-card">
+            <div class="label" style="margin-bottom: 2rem; color: var(--accent);">LECTURE ANNOTATIONS (Q&A)</div>
+            <div class="chat-history" id="chat-history"></div>
+            <div class="chat-input-wrapper">
+                <input type="text" id="chat-input" class="chat-input" placeholder="Ask a question about the lecture...">
             </div>
         </div>
 
+        <!-- Transcript -->
         <div class="result-card">
-            <div class="annotations-section" style="margin:0; max-width: 100%;">
-                <div class="label" style="margin-bottom: 2rem; color: var(--accent);">ANNOTATIONS</div>
-                <div class="chat-history" id="chat-history"></div>
-                <div class="chat-input-wrapper">
-                    <input type="text" id="chat-input" class="chat-input" placeholder="Ask a question...">
-                </div>
+            <div class="transcript-header" id="transcript-header">
+                <span>FULL TRANSCRIPTION</span>
+                <span>show ↓</span>
+            </div>
+            <div class="transcript-content" id="transcript-content">
+                <div id="raw-text" style="white-space: pre-wrap;"></div>
             </div>
         </div>
 
-        <div class="result-card">
-            <div class="transcript-section" style="margin:0; border:none; padding:0;">
-                <div class="transcript-header" id="transcript-header">
-                    <span>RAW TRANSCRIPT</span>
-                    <span>show ↓</span>
-                </div>
-                <div class="transcript-content" id="transcript-content">
-                    <div id="raw-text" style="white-space: pre-wrap;"></div>
-                </div>
-            </div>
+        <!-- Actions -->
+        <div style="margin-top: 2rem; display: flex; flex-wrap: wrap; gap: 1rem; padding-bottom: 4rem;">
+            <button class="btn primary-btn" id="btn-download" style="width:auto; flex:1;">DOWNLOAD FULL REPORT (.TXT)</button>
+            <button class="btn" id="btn-print" style="flex:1;">PRINT AS PDF</button>
+            <button class="btn" id="btn-process-another" style="flex:1; border-color:var(--accent); color:var(--accent);">PROCESS ANOTHER LECTURE</button>
         </div>
-
-        <div style="margin-top: 2rem; display: flex; gap: 1rem; padding-bottom: 4rem;">
-            <button class="btn" id="btn-download">Download .TXT</button>
-            <button class="btn" id="btn-print">Print PDF</button>
-        </div>
-
     </section>
 
     <footer>
-        <div><div class="footer-logo">DeLectured</div></div>
-        <div style="text-align: right;"><div>Groq · Whisper-Turbo · LLaMA 3.3 70B</div></div>
+        <div class="footer-logo">DeLectured</div>
+        <div style="text-align: right;">Groq · Whisper-Turbo · LLaMA 3.3 70B</div>
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <script>
-        mermaid.initialize({ 
-            startOnLoad: false, 
-            theme: 'base',
-            securityLevel: 'loose',
-            themeVariables: {
-                primaryColor: '#F5F0E8',
-                primaryTextColor: '#0A0A08',
-                primaryBorderColor: '#C8402A',
-                lineColor: '#C8402A',
-                secondaryColor: '#1B4D8E',
-                mainBkg: '#F5F0E8'
-            }
-        });
+        mermaid.initialize({ startOnLoad: false, theme: 'base', securityLevel: 'loose', themeVariables: { primaryColor: '#F5F0E8', primaryTextColor: '#0A0A08', primaryBorderColor: '#C8402A', lineColor: '#C8402A' } });
     </script>
     <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
     <script src="app.js"></script>
