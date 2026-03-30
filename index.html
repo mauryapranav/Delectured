@@ -9,7 +9,7 @@
 <body>
     <!-- 1. Top info strip -->
     <div class="top-strip fade-up">
-        <span>DELECTURED v1.1 · WHISPER-LARGE-V3 · LLAMA-3.1-8B</span>
+        <span>DELECTURED v1.3 · WHISPER-TURBO · LLAMA-3.3-70B</span>
         <span id="api-status">API KEY: NOT SET</span>
     </div>
 
@@ -46,20 +46,20 @@
                     Every Word.<br>
                     Structured.
                 </h1>
-                <p class="tagline">Not just transcription + summary. DeLectured understands lecture structure, detects professor emphasis, adapts to subject domain, and produces notes that are genuinely better than what a student would write themselves.</p>
+                <p class="tagline">Not just transcription. v1.3 "Expert" uses LLaMA 3.3 70B to produce exhaustive, high-density study materials that scale with your lecture length. 10 minutes or 2 hours—you get the full depth.</p>
 
                 <table class="comparison-table" style="max-width: 600px; margin-top: 2rem;">
                     <tr>
                         <th>Generic AI (ChatGPT/Otter)</th>
-                        <th>DeLectured Pipeline</th>
+                        <th>DeLectured v1.3 Expert</th>
                     </tr>
                     <tr>
-                        <td>"Summarize this transcript"</td>
-                        <td>2-Stage domain-aware structuring</td>
+                        <td>Fixed-length short summaries</td>
+                        <td>Dynamic scaling (200-500 words)</td>
                     </tr>
                     <tr>
                         <td>Flat bullet points</td>
-                        <td>Visual concept map visualization</td>
+                        <td>Mermaid.js Concept Mindmaps</td>
                     </tr>
                 </table>
 
@@ -75,8 +75,8 @@
                 <div class="hero-visual">
                     <div class="circle-visual"></div>
                     <div style="font-family: var(--font-mono); font-size: 10px; color: var(--accent); position: absolute; bottom: 1rem; right: 1rem; text-align: right;">
-                        // PIPELINE READY<br>
-                        // AWAITING INPUT
+                        // EXPERT PIPELINE READY<br>
+                        // LLAMA-3.3-70B ACTIVE
                     </div>
                 </div>
                 <a href="#upload-section" class="btn primary-btn" style="text-decoration:none; display:inline-block; width: 100%; text-align: center;">Start Structuring ?</a>
@@ -89,7 +89,7 @@
         <div class="container upload-page-grid">
             <div class="upload-col">
                 <h2 style="margin-bottom:2rem;">Upload Audio.</h2>
-                <p class="tagline" style="margin-bottom:2rem; font-size:1rem;">Select a file to begin the analysis pipeline.</p>
+                <p class="tagline" style="margin-bottom:2rem; font-size:1rem;">Up to 1GB supported. Parallel Whisper-Turbo engine engaged.</p>
                 
                 <div class="upload-zone" id="upload-zone" style="margin: 0 0 2rem 0; width: 100%;">
                     <div class="upload-num">01</div>
@@ -120,19 +120,19 @@
             </div>
             
             <div class="how-it-works-col">
-                <h2 style="margin-bottom:2rem;">How It Works</h2>
+                <h2 style="margin-bottom:2rem;">Expert Engine</h2>
                 <ul class="step-list">
                     <li class="step-item">
-                        <h3>Whisper Transcription</h3>
-                        <p>Audio is processed using Groq's whisper-large-v3 API. We automatically chunk large lectures (up to 1GB) and optimize audio quality locally for high-fidelity transcription.</p>
+                        <h3>Speculative Transcription</h3>
+                        <p>We use Whisper-Turbo to process the first 10 minutes instantly. This allows the AI to start "thinking" about the subject while the rest of your 2-hour lecture is still uploading in parallel.</p>
                     </li>
                     <li class="step-item">
-                        <h3>Stage 1: Fast Analysis</h3>
-                        <p>A high-speed LLaMA 3.1 call (~300 tokens) maps the lecture. It identifies the domain (e.g., Computer Science, Economics), detects the structural breakdown, and spots explicit emphasis markers used by the professor.</p>
+                        <h3>Contextual Overlap</h3>
+                        <p>Chunks are stitched with a 3-second overlap. The AI uses the first segment's "Technical Glossary" to ensure accuracy across the entire transcript, preventing jargon errors.</p>
                     </li>
                     <li class="step-item">
-                        <h3>Stage 2: Domain-Aware Structuring</h3>
-                        <p>Using Stage 1's blueprint, a second LLaMA 3.1 pass acts as a domain expert. It extracts concepts, generates a visual concept map via Mermaid.js, identifies exam signals, and creates flashcards.</p>
+                        <h3>70B Intelligent Structuring</h3>
+                        <p>The final pass uses LLaMA 3.3 70B—a model with massive reasoning capacity. It generates exhaustive summaries and concept maps that scale proportionally to the lecture's length.</p>
                     </li>
                 </ul>
             </div>
@@ -268,7 +268,7 @@
             <div>Built by <a href="https://github.com/mauryapranav" target="_blank" rel="noopener">Pranav Kumar Maurya</a></div>
         </div>
         <div style="text-align: right;">
-            <div>Groq · Whisper-large-v3 · LLaMA 3.1</div>
+            <div>Groq · Whisper-Turbo · LLaMA 3.3 70B</div>
             <div>No audio data stored. Ever.</div>
         </div>
     </footer>
