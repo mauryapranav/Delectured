@@ -1,11 +1,11 @@
 // ==========================================
-// DeLectured - Core Logic & Expert Engine
+// DeLectured v1.6.2 - Final Stability
 // ==========================================
 
 const MAX_SIZE = 25 * 1024 * 1024;
 const CHUNK_DURATION = 10 * 60; 
 const TARGET_SAMPLE_RATE = 16000;
-const CONCURRENCY_LIMIT = 2; 
+const CONCURRENCY_LIMIT = 3; 
 const CHUNK_OVERLAP_S = 3; 
 
 const ALLOWED_TYPES = [
@@ -39,10 +39,10 @@ async function processAudioFile(file) {
     const blobs = [];
     for (let i = 0; i < chunks.length; i++) {
         logTerminal(`[1/5] PREPARING AUDIO: Compressing segment ${i+1}/${chunks.length}...`, true);
-        updateProgress(10 + (i/chunks.length)*10, `MP3 Encoding...`);
+        updateProgress(10 + (i/chunks.length)*10, `Encoding...`);
         blobs.push(audioBufferToMp3Blob(chunks[i]));
     }
-    logTerminal(`[1/5] PREPARING AUDIO: Complete (${chunks.length} segments)`, true);
+    logTerminal(`[1/5] PREPARING AUDIO: Complete`, true);
     return blobs;
   } catch (e) { throw new Error("Audio decoding failed."); } finally { audioCtx.close(); }
 }
@@ -126,7 +126,7 @@ function init() {
   
   if (els.processAnother) {
     els.processAnother.addEventListener('click', () => {
-        if (confirm("Wait! Have you saved your notes? Resetting will clear the current results.")) {
+        if (confirm("Save your notes first! Resetting will clear current results. Proceed?")) {
             location.reload();
         }
     });
@@ -173,7 +173,7 @@ async function handleFile(file) {
   document.getElementById('results').style.display = 'none';
   
   updateProgress(5, "Initializing...");
-  logTerminal("DeLectured Core Engine Engaged");
+  logTerminal("DeLectured v1.6.2 - Stability Engine Engaged");
   
   try {
     const audioBlobs = await processAudioFile(file);
@@ -185,10 +185,15 @@ async function handleFile(file) {
       for (let j = 0; j < CONCURRENCY_LIMIT && (i + j) < audioBlobs.length; j++) {
         const idx = i + j;
         batch.push((async () => {
-          results[idx] = await transcribeAudio(audioBlobs[idx]);
-          completed++;
-          logTerminal(`[2/5] TRANSCRIBING LECTURE: Part ${completed}/${audioBlobs.length} received`, true);
-          updateProgress(20 + (completed/audioBlobs.length)*50, `Transcribing...`);
+          try {
+            results[idx] = await transcribeAudio(audioBlobs[idx]);
+            completed++;
+            logTerminal(`[2/5] TRANSCRIBING LECTURE: Received part ${completed}/${audioBlobs.length}...`, true);
+            updateProgress(20 + (completed/audioBlobs.length)*50, `Transcribing...`);
+          } catch (e) {
+            results[idx] = await transcribeAudio(audioBlobs[idx]);
+            completed++;
+          }
         })());
       }
       await Promise.all(batch);
@@ -198,20 +203,20 @@ async function handleFile(file) {
     currentTranscript = fullTranscript;
     document.getElementById('raw-text').textContent = fullTranscript;
     
-    updateProgress(75, "Analyzing...");
-    logTerminal("[3/5] ANALYZING STRUCTURE");
+    updateProgress(75, "Analyzing Structure...");
+    logTerminal("[3/5] ANALYZING LECTURE DOMAIN");
     const analysis = await analyzeTranscriptStage1(fullTranscript);
     
-    updateProgress(85, "Intelligence...");
-    logTerminal("[4/5] GENERATING STUDY GUIDE (70B)");
+    updateProgress(85, "Expert Intelligence...");
+    logTerminal("[4/5] GENERATING HIGH-DENSITY STUDY GUIDE (70B)");
     const notesJson = await generateNotesStage2(fullTranscript, analysis);
     currentNotes = notesJson;
     
-    updateProgress(95, "Rendering...");
+    updateProgress(95, "Rendering Results...");
     logTerminal("[5/5] FINALIZING VISUALS");
+    
     els.terminal.style.display = 'none';
     els.results.style.display = 'block';
-    els.results.scrollIntoView({ behavior: 'smooth' });
     
     renderStage1Badges(analysis);
     renderScore(notesJson.score);
@@ -221,10 +226,9 @@ async function handleFile(file) {
     renderFlashcards(notesJson.flashcards);
     if(notesJson.concept_map) renderConceptMap(notesJson.concept_map);
 
-    document.querySelectorAll('.results > *').forEach((el, i) => {
-        el.style.opacity = '0'; el.style.animation = `fadeUp 0.5s ${i * 0.1}s forwards`;
-    });
     updateProgress(100, "Done");
+    els.results.scrollIntoView({ behavior: 'smooth' });
+    
   } catch (error) {
     logTerminal(`[FATAL ERROR] ${error.message}`);
     const retryBtn = document.createElement('button');
@@ -265,22 +269,22 @@ async function analyzeTranscriptStage1(text) {
 
 async function generateNotesStage2(transcript, analysis) {
     const wordCount = transcript.split(' ').length;
-    const prompt = `You are a Subject Matter Expert in ${analysis.domain}.
+    const prompt = `You are a Subject Matter Expert in ${analysis.domain}. 
     TASK: Transform this ${wordCount}-word transcript into an EXHAUSTIVE, high-density study guide.
     STRICT REQUIREMENTS:
-    1. SUMMARY: Provide a deep technical insight explaining the core thesis (at least 500 words).
+    1. SUMMARY: Provide a deep technical insight explaining the core thesis (MINIMUM 500 words).
     2. CONCEPTS: Extract at least 20 technical concepts with deep academic definitions.
-    3. CONCEPT MAP: Return complex Mermaid.js graph TD code.
+    3. CONCEPT MAP: Return complex Mermaid.js graph TD code with rounded nodes.
     Return ONLY valid JSON:
     {
       "notes": {
-        "summary": "Full detailed analysis (500+ words)...",
-        "topics": [],
-        "concepts": [{ "term": "...", "explanation": "Deep technical definition...", "confidence": 1-3 }],
-        "important": [],
+        "summary": "Deep technical analysis (500+ words)...",
+        "topics": ["Topic 1", "..."],
+        "concepts": [{ "term": "...", "explanation": "Deep academic definition...", "confidence": 1-3 }],
+        "important": ["Insight 1", "..."],
         "structure_summary": { "intro": "...", "core": "...", "examples": "...", "conclusion": "..." }
       },
-      "concept_map": "graph TD\\n...",
+      "concept_map": "graph TD\\n  A((Concept)) -- defines --> B((Concept))\\n...",
       "score": { "clarity": 85, "density": 95, "pace": 70, "concept_count": 20, "revision_mins": 60 },
       "flashcards": [{ "q": "...", "a": "..." }],
       "lecture_dna": [20 integers]
@@ -298,6 +302,9 @@ async function generateNotesStage2(transcript, analysis) {
 async function handleChat(msg) {
     if (!currentNotes) return;
     const chatHistoryEl = document.getElementById('chat-history');
+    const userEl = document.createElement('div');
+    userEl.className = 'chat-msg chat-user'; userEl.textContent = msg;
+    chatHistoryEl.appendChild(userEl);
     const aiEl = document.createElement('div');
     aiEl.className = 'chat-msg chat-ai'; aiEl.textContent = '...';
     chatHistoryEl.appendChild(aiEl);
@@ -414,12 +421,12 @@ function downloadFullReport() {
     if(!currentNotes || !currentTranscript) return;
     let text = `DELECTURED FULL REPORT\n========================\n\n`;
     text += `SUMMARY:\n${currentNotes.notes?.summary || ''}\n\n`;
-    text += `CONCEPTS:\n`;
+    text += `TECHNICAL CONCEPTS:\n`;
     currentNotes.notes?.concepts?.forEach(c => { text += `- ${c.term}: ${c.explanation}\n`; });
     text += `\nFULL TRANSCRIPTION:\n${currentTranscript}`;
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = 'Report.txt'; a.click();
+    const a = document.createElement('a'); a.href = url; a.download = 'DeLectured_Report.txt'; a.click();
 }
 
 document.addEventListener('DOMContentLoaded', init);
