@@ -1,5 +1,5 @@
 // ==========================================
-// DeLectured v1.6.5 - Resilient UI
+// DeLectured v1.6.7 - Rendering Stability
 // ==========================================
 
 const MAX_SIZE = 25 * 1024 * 1024;
@@ -39,7 +39,7 @@ async function processAudioFile(file) {
     const blobs = [];
     for (let i = 0; i < chunks.length; i++) {
         logTerminal(`[1/5] PREPARING AUDIO: Compressing segment ${i+1}/${chunks.length}...`, true);
-        updateProgress(10 + (i/chunks.length)*10, `MP3 Encoding...`);
+        updateProgress(10 + (i/chunks.length)*10, `Encoding...`);
         blobs.push(await audioBufferToMp3BlobAsync(chunks[i]));
     }
     logTerminal(`[1/5] PREPARING AUDIO: Complete`, true);
@@ -175,7 +175,7 @@ async function handleFile(file) {
   document.getElementById('results').style.display = 'none';
   
   updateProgress(5, "Initializing...");
-  logTerminal("DeLectured v1.6.5 - Resilient Engine Engaged");
+  logTerminal("DeLectured v1.6.7 - Stability Engine Engaged");
   
   try {
     const audioBlobs = await processAudioFile(file);
@@ -188,7 +188,6 @@ async function handleFile(file) {
         const idx = i + j;
         batch.push((async () => {
           try {
-            // Segment Retry Loop (3 attempts)
             let text = null;
             for (let attempt = 1; attempt <= 3; attempt++) {
                 try {
@@ -221,26 +220,27 @@ async function handleFile(file) {
     const analysis = await analyzeTranscriptStage1(fullTranscript);
     
     updateProgress(85, "Expert Intelligence...");
-    logTerminal("[4/5] GENERATING STUDY GUIDE (70B)");
+    logTerminal("[4/5] GENERATING HIGH-DENSITY STUDY GUIDE (70B)");
     const notesJson = await generateNotesStage2(fullTranscript, analysis);
     currentNotes = notesJson;
     
     updateProgress(95, "Finalizing Visuals...");
     logTerminal("[5/5] RENDERING RESULTS");
     
+    // Critical: Show results and scroll first so user sees it even if rendering has tiny issues
     els.terminal.style.display = 'none';
     els.results.style.display = 'block';
-    
-    renderStage1Badges(analysis);
-    renderScore(notesJson.score);
-    renderPullquote(notesJson.notes?.summary || "");
-    renderDNA(notesJson.lecture_dna || Array(20).fill(5));
-    renderNotesGrid(notesJson.notes);
-    renderFlashcards(notesJson.flashcards);
-    if(notesJson.concept_map) renderConceptMap(notesJson.concept_map);
-
     updateProgress(100, "Done");
     els.results.scrollIntoView({ behavior: 'smooth' });
+    
+    // Defensive rendering loop
+    try { renderStage1Badges(analysis); } catch(e) { console.warn("Badge error", e); }
+    try { renderScore(notesJson.score); } catch(e) { console.warn("Score error", e); }
+    try { renderPullquote(notesJson.notes?.summary || ""); } catch(e) { console.warn("Summary error", e); }
+    try { renderDNA(notesJson.lecture_dna || Array(20).fill(5)); } catch(e) { console.warn("DNA error", e); }
+    try { renderNotesGrid(notesJson.notes); } catch(e) { console.warn("Grid error", e); }
+    try { renderFlashcards(notesJson.flashcards); } catch(e) { console.warn("Flash error", e); }
+    try { if(notesJson.concept_map) renderConceptMap(notesJson.concept_map); } catch(e) { console.warn("Map error", e); }
     
   } catch (error) {
     logTerminal(`[FATAL ERROR] ${error.message}`);
@@ -253,17 +253,14 @@ async function handleFile(file) {
 
 async function transcribeAudio(blob) {
   const formData = new FormData();
-  // Fixed: Forced .mp3 filename and audio/mpeg type for API stability
   formData.append('file', blob, 'lecture_segment.mp3');
   formData.append('model', 'whisper-large-v3-turbo');
   if(selectedLanguage !== 'auto') formData.append('language', selectedLanguage);
-  
   const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${apiKey}` },
     body: formData
   });
-  
   if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error?.message || `Status ${res.status}`);
@@ -291,14 +288,14 @@ async function generateNotesStage2(transcript, analysis) {
     const prompt = `You are a Subject Matter Expert in ${analysis.domain}. 
     TASK: Transform this ${wordCount}-word transcript into an EXHAUSTIVE, high-density study guide.
     1. SUMMARY: Minimum 500 words technical explaining the core thesis.
-    2. CONCEPTS: Extract 20 concepts with deep technical definitions.
+    2. CONCEPTS: Extract 20 concepts with deep definitions.
     3. CONCEPT MAP: Mermaid.js graph TD code.
     Return ONLY valid JSON:
     {
       "notes": {
         "summary": "Full detailed analysis (500+ words)...",
         "topics": ["Topic 1", "..."],
-        "concepts": [{ "term": "...", "explanation": "Deep academic definition...", "confidence": 1-3 }],
+        "concepts": [{ "term": "...", "explanation": "Deep definition...", "confidence": 1-3 }],
         "important": ["Insight 1", "..."],
         "structure_summary": { "intro": "...", "core": "...", "examples": "...", "conclusion": "..." }
       },
@@ -361,7 +358,9 @@ function logTerminal(msg, update = false) {
 function renderStage1Badges(analysis) {
     const container = document.getElementById('badges-container');
     if (!container) return;
-    container.innerHTML = `<span class="badge">◆ ${analysis.domain.toUpperCase()}</span><span class="badge">◆ ${analysis.subject.toUpperCase()}</span>`;
+    const dom = (analysis?.domain || "GENERAL").toUpperCase();
+    const sub = (analysis?.subject || "LECTURE").toUpperCase();
+    container.innerHTML = `<span class="badge">◆ ${dom}</span><span class="badge">◆ ${sub}</span>`;
 }
 
 function renderScore(score) {
@@ -375,10 +374,7 @@ function renderScore(score) {
 
 function renderPullquote(text) { 
     const el = document.getElementById('summary-quote');
-    if (el) {
-        // Preserves newlines from AI long-form response
-        el.innerHTML = text.replace(/\n/g, '<br>'); 
-    }
+    if (el) el.innerHTML = (text || "").replace(/\n/g, '<br>'); 
 }
 
 function renderDNA(dnaArray) {
