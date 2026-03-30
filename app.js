@@ -5,8 +5,8 @@
 const MAX_SIZE = 25 * 1024 * 1024;
 const CHUNK_DURATION = 10 * 60; 
 const TARGET_SAMPLE_RATE = 16000;
-const CONCURRENCY_LIMIT = 5; // Increased for Groq efficiency
-const CHUNK_OVERLAP_S = 3; // 3 seconds overlap for stitching
+const CONCURRENCY_LIMIT = 3; 
+const CHUNK_OVERLAP_S = 3; 
 
 const ALLOWED_TYPES = [
   'audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/ogg', 
@@ -15,7 +15,9 @@ const ALLOWED_TYPES = [
 
 // Audio Processing Utilities
 async function processAudioFile(file, logTerminal) {
-  logTerminal("[PROCESS] Decoding and compressing audio...");
+  logTerminal("[PROCESS] Reading audio file...");
+  updateProgress(5, "Decoding Audio...");
+  
   const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: TARGET_SAMPLE_RATE });
   
   try {
@@ -29,12 +31,10 @@ async function processAudioFile(file, logTerminal) {
     const chunkSamples = CHUNK_DURATION * TARGET_SAMPLE_RATE;
     const totalSamples = audioBuffer.length;
     
-    // Split with overlap
     for (let i = 0; i < totalSamples; i += (chunkSamples - overlapSamples)) {
       const end = Math.min(i + chunkSamples, totalSamples);
       const chunkBuffer = audioCtx.createBuffer(1, end - i, TARGET_SAMPLE_RATE);
       const chanData = chunkBuffer.getChannelData(0);
-      
       for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
         const data = audioBuffer.getChannelData(channel).subarray(i, end);
         for (let s = 0; s < data.length; s++) {
@@ -45,8 +45,12 @@ async function processAudioFile(file, logTerminal) {
       if (end === totalSamples) break;
     }
     
-    logTerminal(`[PROCESS] Optimized into ${chunks.length} overlapping segments.`);
-    const blobs = await Promise.all(chunks.map(buffer => audioBufferToMp3Blob(buffer)));
+    logTerminal(`[PROCESS] Compressing ${chunks.length} segments to MP3...`);
+    const blobs = [];
+    for (let i = 0; i < chunks.length; i++) {
+        updateProgress(10 + (i/chunks.length)*10, `Compressing ${i+1}/${chunks.length}...`);
+        blobs.push(audioBufferToMp3Blob(chunks[i]));
+    }
     return blobs;
   } catch (e) {
     console.error(e);
@@ -75,7 +79,7 @@ function audioBufferToMp3Blob(buffer) {
   }
   const finish = mp3encoder.flush();
   if (finish.length > 0) mp3Data.push(finish);
-  return new Blob(mp3Data, { type: 'audio/mp3' });
+  return new Blob(mp3Data, { type: 'audio/mpeg' });
 }
 
 let apiKey = localStorage.getItem('groq_api_key') || '';
@@ -87,7 +91,6 @@ const examPatterns = [
   /this (will|is going to) be (in|on) (the|your) (exam|test|quiz|finals)/gi,
   /remember this/gi, /this is important/gi, /you (should|must|need to) know this/gi,
   /don't forget/gi, /pay attention/gi, /note (this|that) down/gi,
-  /यह exam में आएगा/gi, /यह important है/gi, /याद रखो/gi,
 ];
 
 const els = {
@@ -173,70 +176,73 @@ function updateProgress(percent, label) {
 
 async function handleFile(file) {
   if (!apiKey) { alert("Please set your Groq API key first."); return; }
-  
   els.uploadZone.style.display = 'none';
   els.terminal.style.display = 'block';
   els.terminalContent.innerHTML = '';
   document.getElementById('results').style.display = 'none';
   
-  updateProgress(5, "Initializing...");
-  logTerminal("DeLectured v1.3 - Expert Pipeline Engaged");
+  updateProgress(5, "Initializing Pipeline...");
+  logTerminal("DeLectured v1.3.1 - Enhanced Expert Pipeline");
   
   try {
-    updateProgress(10, "Decoding Audio...");
     const audioBlobs = await processAudioFile(file, logTerminal);
-    
     const results = new Array(audioBlobs.length);
     let completed = 0;
-    let technicalPrompt = "";
-    let stage1Analysis = null;
 
-    // Sequential first chunk to get Stage 1 context
-    updateProgress(15, "Transcribing Part 1 (Contextualizing)...");
+    // Part 1 - Speculative Analysis
+    updateProgress(20, "Transcribing Part 1 (Speculative)...");
     const firstText = await transcribeAudio(audioBlobs[0]);
     results[0] = firstText;
     completed++;
     
-    logTerminal("[STAGE 1] Running speculative analysis on Part 1...");
-    stage1Analysis = await analyzeTranscriptStage1(firstText);
-    logTerminal(`[STAGE 1] Detected: ${stage1Analysis.domain} - ${stage1Analysis.subject}`);
-    technicalPrompt = `Technical lecture about ${stage1Analysis.subject} (${stage1Analysis.domain}). Terms: ${stage1Analysis.emphasis_markers.join(", ")}`;
+    logTerminal("[STAGE 1] Running instant domain & subject detection...");
+    const stage1Analysis = await analyzeTranscriptStage1(firstText);
     
+    // LIVE UI UPDATE: Subject and Preliminary Summary
+    logTerminal(`[STAGE 1] Subject: ${stage1Analysis.subject}`);
+    els.results.style.display = 'block';
     renderStage1Badges(stage1Analysis);
+    renderPullquote(`[PRELIMINARY SUMMARY]: ${stage1Analysis.preliminary_summary} (Full deep-structuring in progress...)`);
+    els.results.scrollIntoView({ behavior: 'smooth' });
 
-    // Parallel remaining chunks with Stage 1 context
+    // Technical Context for remaining chunks (Sanitized for Whisper API)
+    const technicalPrompt = `Lecture about ${stage1Analysis.subject} in ${stage1Analysis.domain}. Terms: ${stage1Analysis.emphasis_markers.slice(0, 5).join(", ")}`.replace(/[^a-zA-Z0-9, ]/g, '').substring(0, 200);
+
+    // Parallel processing for remaining chunks
     if (audioBlobs.length > 1) {
-      logTerminal(`[WHISPER] Processing remaining ${audioBlobs.length-1} parts with context...`);
+      logTerminal(`[WHISPER] Processing remaining ${audioBlobs.length-1} parts in parallel...`);
       const remainingIdx = Array.from({length: audioBlobs.length - 1}, (_, i) => i + 1);
       
       for (let i = 0; i < remainingIdx.length; i += CONCURRENCY_LIMIT) {
         const batch = remainingIdx.slice(i, i + CONCURRENCY_LIMIT).map(async (idx) => {
-          const text = await transcribeAudio(audioBlobs[idx], technicalPrompt);
-          results[idx] = text;
-          completed++;
-          updateProgress(15 + (completed/audioBlobs.length)*60, `Transcribing ${completed}/${audioBlobs.length}...`);
+          try {
+            const text = await transcribeAudio(audioBlobs[idx], technicalPrompt);
+            results[idx] = text;
+            completed++;
+            updateProgress(20 + (completed/audioBlobs.length)*50, `Transcribing ${completed}/${audioBlobs.length}...`);
+          } catch (e) {
+            logTerminal(`[RETRY] Error in Part ${idx+1}. Retrying...`);
+            const text = await transcribeAudio(audioBlobs[idx], technicalPrompt);
+            results[idx] = text;
+            completed++;
+          }
         });
         await Promise.all(batch);
       }
     }
 
-    updateProgress(75, "Stitching & Cleaning...");
-    // Simple deduplication for 3s overlap
-    const transcript = deduplicateTranscript(results);
-    currentTranscript = transcript;
-    document.getElementById('raw-text').textContent = transcript;
+    updateProgress(80, "Expert Intelligence (70B Model)...");
+    const fullTranscript = results.join(" ");
+    currentTranscript = fullTranscript;
+    document.getElementById('raw-text').textContent = fullTranscript;
     
-    const signals = findExamSignals(transcript);
-    
-    updateProgress(85, "Stage 2 Structuring...");
-    logTerminal("[STAGE 2] Generating exhaustive study notes (70B Model)...");
-    const notesJson = await generateNotesStage2(transcript, stage1Analysis, signals);
+    logTerminal("[STAGE 2] Generating exhaustive study guide...");
+    const signals = findExamSignals(fullTranscript);
+    const notesJson = await generateNotesStage2(fullTranscript, stage1Analysis, signals);
     currentNotes = notesJson;
     
     updateProgress(100, "Complete");
-    els.terminal.style.display = 'none';
-    els.results.style.display = 'block';
-    els.results.scrollIntoView({ behavior: 'smooth' });
+    logTerminal("[PROCESS] Finalizing visual renders...");
     
     renderScore(notesJson.score);
     renderPullquote(notesJson.notes.summary);
@@ -252,17 +258,15 @@ async function handleFile(file) {
         el.style.opacity = '0'; el.style.animation = `fadeUp 0.5s ${i * 0.1}s forwards`;
     });
     
+    setTimeout(() => { els.terminal.style.display = 'none'; }, 3000);
+    
   } catch (error) {
     logTerminal(`[FATAL ERROR] ${error.message}`);
-    console.error(error);
+    const retryBtn = document.createElement('button');
+    retryBtn.className = 'btn'; retryBtn.textContent = 'BACK TO UPLOAD';
+    retryBtn.onclick = () => { els.terminal.style.display = 'none'; els.uploadZone.style.display = 'flex'; };
+    els.terminalContent.appendChild(retryBtn);
   }
-}
-
-function deduplicateTranscript(parts) {
-    if (parts.length === 1) return cleanTranscript(parts[0]);
-    // For overlap stitching, we just join. Whisper-turbo is good at handling the prefix/suffix context.
-    // A more advanced version would use fuzzy matching on the 3s overlap window.
-    return cleanTranscript(parts.join(" "));
 }
 
 async function transcribeAudio(blob, prompt = "") {
@@ -277,17 +281,22 @@ async function transcribeAudio(blob, prompt = "") {
     headers: { 'Authorization': `Bearer ${apiKey}` },
     body: formData
   });
-  if (!res.ok) throw new Error(`Whisper API error: ${res.status}`);
+  if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `Whisper Error ${res.status}`);
+  }
   const data = await res.json();
   return data.text;
 }
 
 async function analyzeTranscriptStage1(text) {
-    const prompt = `Analyze this 10-minute lecture segment. Return JSON:
+    const prompt = `Analyze this 10-minute lecture segment. Return strictly valid JSON:
 {
-  "domain": "Domain", "subject": "Specific Topic",
+  "domain": "Academic Domain", 
+  "subject": "Main Topic Name",
+  "preliminary_summary": "3-4 sentence summary of these first 10 minutes",
   "structure": { "intro_pct": 25, "core_pct": 75, "examples_pct": 0, "conclusion_pct": 0 },
-  "emphasis_markers": ["technical term 1", "concept 1"],
+  "emphasis_markers": ["technical term 1", "key concept"],
   "language": { "detected": "English", "hindi_pct": 0, "english_pct": 100 }
 }
 Transcript: ${text.substring(0, 4000)}`;
@@ -307,18 +316,13 @@ Transcript: ${text.substring(0, 4000)}`;
 
 async function generateNotesStage2(transcript, analysis, signals) {
     const wordCount = transcript.split(' ').length;
-    const conceptScale = Math.min(18, Math.max(6, Math.floor(wordCount / 800)));
-    
-    const prompt = `You are a world-class educational analyst. Transform this exhaustive ${wordCount}-word transcript into high-density study materials.
-    
-    LECTURE: ${analysis.subject} (${analysis.domain})
-    
+    const conceptScale = Math.min(20, Math.max(8, Math.floor(wordCount / 650)));
+    const prompt = `You are a Subject Matter Expert in ${analysis.domain}. Structure this ${wordCount}-word lecture into exhaustive study notes.
+    LECTURE: ${analysis.subject}.
     REQUIREMENTS:
-    1. Summary: Long-form insight (200-300 words).
-    2. Concepts: At least ${conceptScale} unique technical terms with deep definitions.
-    3. Mermaid Map: A comprehensive "graph TD" visualization.
-    4. Exam Signals: Map exact quotes to potential exam questions.
-    
+    1. Summary: Long-form deep insight (300-500 words).
+    2. Concepts: Extract exactly ${conceptScale} concepts with detailed technical explanations.
+    3. Mermaid Map: Comprehensive Mindmap.
     Return ONLY valid JSON:
     {
       "notes": {
@@ -329,13 +333,12 @@ async function generateNotesStage2(transcript, analysis, signals) {
         "important": [],
         "questions": []
       },
-      "concept_map": "graph TD...",
-      "score": { "clarity": 85, "clarity_label": "High", "density": 90, "density_label": "Very High", "pace": 70, "pace_label": "Steady", "concept_count": ${conceptScale}, "revision_mins": 30 },
+      "concept_map": "mindmap...",
+      "score": { "clarity": 85, "clarity_label": "High", "density": 95, "density_label": "Maximum", "pace": 70, "pace_label": "Steady", "concept_count": ${conceptScale}, "revision_mins": 45 },
       "flashcards": [{ "q": "...", "a": "..." }],
       "exam_signals": [{ "quote": "...", "topic": "..." }],
       "lecture_dna": [20 integers]
     }
-    
     Transcript: ${transcript}`;
 
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -348,10 +351,6 @@ async function generateNotesStage2(transcript, analysis, signals) {
             response_format: { type: "json_object" }
         })
     });
-    if (!res.ok) {
-        const err = await res.json();
-        throw new Error(`Stage 2 (70B) failed: ${err.error?.message || res.status}`);
-    }
     const data = await res.json();
     return JSON.parse(data.choices[0].message.content);
 }
@@ -362,7 +361,6 @@ async function handleChat(msg) {
     const aiEl = document.createElement('div');
     aiEl.className = 'chat-msg chat-ai'; aiEl.textContent = '...';
     chatHistoryEl.appendChild(aiEl);
-    
     try {
         const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
