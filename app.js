@@ -1,11 +1,11 @@
 // ==========================================
-// DeLectured - App Logic & Intelligence
+// DeLectured v1.5 - Restoration & Excellence
 // ==========================================
 
 const MAX_SIZE = 25 * 1024 * 1024;
 const CHUNK_DURATION = 10 * 60; 
 const TARGET_SAMPLE_RATE = 16000;
-const CONCURRENCY_LIMIT = 3; 
+const CONCURRENCY_LIMIT = 2; 
 const CHUNK_OVERLAP_S = 3; 
 
 const ALLOWED_TYPES = [
@@ -13,7 +13,6 @@ const ALLOWED_TYPES = [
   'audio/flac', 'video/mp4', 'audio/webm', 'audio/amr', 'audio/aac'
 ];
 
-// Audio Processing Utilities
 async function processAudioFile(file) {
   logTerminal("[1/5] PREPARING AUDIO");
   updateProgress(5, "Decoding...");
@@ -45,9 +44,7 @@ async function processAudioFile(file) {
     }
     logTerminal(`[1/5] PREPARING AUDIO: Complete (${chunks.length} segments)`, true);
     return blobs;
-  } catch (e) {
-    throw new Error("Audio decoding failed. Format might be unsupported.");
-  } finally { audioCtx.close(); }
+  } catch (e) { throw new Error("Audio decoding failed."); } finally { audioCtx.close(); }
 }
 
 function audioBufferToMp3Blob(buffer) {
@@ -137,15 +134,10 @@ function init() {
         if (!currentTranscript) return;
         els.refreshFlashcards.textContent = "↻ GENERATING...";
         els.refreshFlashcards.disabled = true;
-        try {
-            const newCards = await refreshFlashcards(currentTranscript);
-            renderFlashcards(newCards);
-        } catch (e) {
-            console.error(e);
-        } finally {
-            els.refreshFlashcards.textContent = "↻ REFRESH SET";
-            els.refreshFlashcards.disabled = false;
-        }
+        const newCards = await refreshFlashcards(currentTranscript);
+        renderFlashcards(newCards);
+        els.refreshFlashcards.textContent = "↻ REFRESH SET";
+        els.refreshFlashcards.disabled = false;
     });
   }
 
@@ -191,7 +183,7 @@ async function handleFile(file) {
   document.getElementById('results').style.display = 'none';
   
   updateProgress(5, "Starting...");
-  logTerminal("DeLectured v1.4.1 - Visual Expert Pipeline");
+  logTerminal("DeLectured v1.5 - Restoration Engine Active");
   
   try {
     const audioBlobs = await processAudioFile(file);
@@ -203,15 +195,10 @@ async function handleFile(file) {
       for (let j = 0; j < CONCURRENCY_LIMIT && (i + j) < audioBlobs.length; j++) {
         const idx = i + j;
         batch.push((async () => {
-          try {
-            results[idx] = await transcribeAudio(audioBlobs[idx]);
-            completed++;
-            logTerminal(`[2/5] TRANSCRIBING LECTURE: Received part ${completed}/${audioBlobs.length}...`, true);
-            updateProgress(20 + (completed/audioBlobs.length)*50, `Transcribing...`);
-          } catch (e) {
-            results[idx] = await transcribeAudio(audioBlobs[idx]);
-            completed++;
-          }
+          results[idx] = await transcribeAudio(audioBlobs[idx]);
+          completed++;
+          logTerminal(`[2/5] TRANSCRIBING LECTURE: Received part ${completed}/${audioBlobs.length}...`, true);
+          updateProgress(20 + (completed/audioBlobs.length)*50, `Transcribing...`);
         })());
       }
       await Promise.all(batch);
@@ -222,12 +209,11 @@ async function handleFile(file) {
     document.getElementById('raw-text').textContent = fullTranscript;
     
     updateProgress(75, "Analyzing...");
-    logTerminal("[3/5] ANALYZING STRUCTURE & DOMAIN");
+    logTerminal("[3/5] ANALYZING STRUCTURE");
     const analysis = await analyzeTranscriptStage1(fullTranscript);
-    logTerminal(`[3/5] ANALYZING STRUCTURE: Detected ${analysis.domain}`, true);
     
-    updateProgress(85, "Visual Intelligence...");
-    logTerminal("[4/5] GENERATING VISUAL STUDY GUIDE (70B)");
+    updateProgress(85, "Intelligence...");
+    logTerminal("[4/5] GENERATING HIGH-DENSITY STUDY GUIDE (70B)");
     const signals = findExamSignals(fullTranscript);
     const notesJson = await generateNotesStage2(fullTranscript, analysis, signals);
     currentNotes = notesJson;
@@ -293,29 +279,31 @@ async function analyzeTranscriptStage1(text) {
 
 async function generateNotesStage2(transcript, analysis, signals) {
     const wordCount = transcript.split(' ').length;
-    const prompt = `You are a Subject Matter Expert in ${analysis.domain}. 
-    Create dynamic study materials for this ${wordCount}-word lecture.
+    const prompt = `You are a world-class Subject Matter Expert in ${analysis.domain}.
     
-    SPECIAL RULE: The "concept_map" field MUST contain complex Mermaid.js graph code. 
-    Use "graph TD" with descriptive relationships, rounded nodes (()), and subgraphs if applicable. 
-    Make it look like a professional system architecture or flowchart.
+    TASK: Transform this ${wordCount}-word transcript into an EXHAUSTIVE, high-density study guide.
     
-    Return strictly valid JSON:
+    STRICT REQUIREMENTS:
+    1. SUMMARY: Provide a deep, 400-500 word technical insight. Do not simplify.
+    2. CONCEPTS: Extract at least 15-20 unique concepts with deep academic definitions.
+    3. CONCEPT MAP: Return complex Mermaid.js graph TD code with logical relationships.
+    
+    Return ONLY valid JSON:
     {
       "notes": {
-        "summary": "Insightful long-form (300-500 words)",
-        "structure_summary": { "intro": "...", "core": "...", "examples": "...", "conclusion": "..." },
-        "topics": [],
-        "concepts": [{ "term": "...", "explanation": "...", "confidence": 1-3 }],
-        "important": [],
-        "questions": []
+        "summary": "Full length detailed analysis...",
+        "topics": ["Major Topic 1", "..."],
+        "concepts": [{ "term": "...", "explanation": "Deep detailed technical definition...", "confidence": 1-3 }],
+        "important": ["Crucial insight 1", "..."],
+        "structure_summary": { "intro": "...", "core": "...", "examples": "...", "conclusion": "..." }
       },
-      "concept_map": "graph TD\\n  A((Concept 1)) -- defines --> B((Concept 2))\\n...",
-      "score": { "clarity": 85, "density": 95, "pace": 70, "concept_count": 10, "revision_mins": 45 },
+      "concept_map": "graph TD\\n  A((Concept)) -- defines --> B((Concept))\\n...",
+      "score": { "clarity": 85, "density": 95, "pace": 70, "concept_count": 15, "revision_mins": 45 },
       "flashcards": [{ "q": "...", "a": "..." }],
       "exam_signals": [{ "quote": "...", "topic": "..." }],
       "lecture_dna": [20 integers]
     }
+    
     Transcript: ${transcript}`;
     
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -338,7 +326,7 @@ async function refreshFlashcards(transcript) {
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
             model: "llama-3.1-8b-instant",
-            messages: [{ role: "user", content: `Generate 6 diverse active recall flashcards from this transcript. Return ONLY JSON: {"flashcards": [{"q": "...", "a": "..."}]}. Transcript: ${transcript.substring(0, 15000)}` }],
+            messages: [{ role: "user", content: `Generate 6 diverse active recall flashcards from this transcript. JSON: {"flashcards": [{"q": "...", "a": "..."}]}. Transcript: ${transcript.substring(0, 15000)}` }],
             response_format: { type: "json_object" }
         })
     });
@@ -383,17 +371,10 @@ async function handleChat(msg) {
 }
 
 function logTerminal(msg, update = false) {
-  if (update && els.terminalContent.lastChild) {
-    els.terminalContent.lastChild.textContent = `> ${msg}`;
-  } else {
-    const line = document.createElement('div');
-    line.className = 'terminal-line'; line.textContent = `> ${msg}`;
-    els.terminalContent.appendChild(line);
-  }
+  if (update && els.terminalContent.lastChild) { els.terminalContent.lastChild.textContent = `> ${msg}`; }
+  else { const line = document.createElement('div'); line.className = 'terminal-line'; line.textContent = `> ${msg}`; els.terminalContent.appendChild(line); }
   els.terminal.scrollTop = els.terminal.scrollHeight;
 }
-
-function cleanTranscript(text) { return text.replace(/\b(um|uh|you know|basically)\b/gi, '').replace(/\s+/g, ' ').trim(); }
 
 function findExamSignals(text) {
   let found = [];
@@ -437,45 +418,42 @@ function renderDNA(dnaArray) {
         const bar = document.createElement('div');
         bar.className = 'dna-bar';
         bar.style.opacity = (val / 10).toString();
-        const height = (val / 10) * 100; 
+        bar.style.height = (val / 10) * 100 + '%'; 
         container.appendChild(bar);
-        setTimeout(() => { bar.style.height = height + '%'; }, 500 + (i * 25));
     });
 }
 
 function renderExamSignals(signals) {
     const container = document.getElementById('exam-signals-container');
     if(!container) return;
-    if(!signals || signals.length === 0) { container.style.display = 'none'; return; }
     container.style.display = 'block';
     const list = document.getElementById('exam-signals-list');
-    if (!list) return;
-    list.innerHTML = '';
-    signals.forEach(sig => {
-        const div = document.createElement('div');
-        div.className = 'exam-signal-item';
-        div.innerHTML = `"${sig?.quote || ''}" <span style="color:var(--text-tertiary); margin-left:10px;">// ${sig?.topic || ''}</span>`;
-        list.appendChild(div);
-    });
+    if (list) {
+        list.innerHTML = '';
+        signals.forEach(sig => {
+            const div = document.createElement('div');
+            div.className = 'exam-signal-item';
+            div.textContent = `"${sig?.quote || ''}" // ${sig?.topic || ''}`;
+            list.appendChild(div);
+        });
+    }
 }
 
 function renderNotesGrid(notes) {
     const topicsCol = document.getElementById('col-topics');
     const conceptsCol = document.getElementById('col-concepts');
     if (topicsCol && notes?.topics) {
-        let html = '';
-        notes.topics.forEach(t => html += `<div class="notes-item"><strong>→ ${t}</strong></div>`);
-        html += `<div class="notes-col-header" style="margin-top:2rem">Key Takeaways</div>`;
-        if(notes.important) notes.important.forEach(i => html += `<div class="notes-item">${i}</div>`);
-        topicsCol.innerHTML = html;
+        topicsCol.innerHTML = '<div class="notes-col-header">Topics & Takeaways</div>';
+        notes.topics.forEach(t => { const d = document.createElement('div'); d.className='notes-item'; d.innerHTML=`<strong>→ ${t}</strong>`; topicsCol.appendChild(d); });
+        if(notes.important) notes.important.forEach(i => { const d = document.createElement('div'); d.className='notes-item'; d.textContent=i; topicsCol.appendChild(d); });
     }
     if (conceptsCol && notes?.concepts) {
-        let cHtml = '';
+        conceptsCol.innerHTML = '<div class="notes-col-header">Technical Concepts</div>';
         notes.concepts.forEach(c => {
-            const dots = Array(3).fill(0).map((_, i) => `<span class="dot ${i < (c.confidence || 1) ? 'filled' : ''}"></span>`).join('');
-            cHtml += `<div class="notes-item"><div class="concept-header"><span class="concept-term">${c.term || ''}</span><span class="confidence-dots">${dots}</span></div><div style="font-size:13px; color:var(--text-secondary)">${c.explanation || ''}</div></div>`;
+            const d = document.createElement('div'); d.className='notes-item';
+            d.innerHTML = `<div class="concept-header"><strong>${c.term || ''}</strong></div><div style="font-size:13px; color:var(--text-secondary)">${c.explanation || ''}</div>`;
+            conceptsCol.appendChild(d);
         });
-        conceptsCol.innerHTML = cHtml;
     }
 }
 
@@ -486,7 +464,7 @@ function renderConceptMap(mermaidCode) {
     container.style.display = 'block';
     target.innerHTML = mermaidCode;
     target.removeAttribute('data-processed');
-    try { if (typeof mermaid !== 'undefined') mermaid.contentLoaded(); } catch (e) { container.style.display = 'none'; }
+    setTimeout(() => { if (typeof mermaid !== 'undefined') mermaid.contentLoaded(); }, 100);
 }
 
 function renderFlashcards(cards) {
@@ -496,8 +474,7 @@ function renderFlashcards(cards) {
     cards.forEach((card, i) => {
         const div = document.createElement('div');
         div.className = 'flashcard';
-        div.style.setProperty('--tilt', i % 2 === 0 ? '0.4deg' : '-0.4deg');
-        div.innerHTML = `<div class="flashcard-inner"><div class="flashcard-front"><div class="fc-q-prefix">Q:</div><div class="fc-text">${card?.q || ''}</div><div class="fc-flip-hint">click to flip →</div></div><div class="flashcard-back"><div class="fc-a-prefix">A:</div><div class="fc-text">${card?.a || ''}</div></div></div>`;
+        div.innerHTML = `<div class="flashcard-inner"><div class="flashcard-front"><div class="fc-q-prefix">Q:</div><div class="fc-text">${card?.q || ''}</div></div><div class="flashcard-back"><div class="fc-a-prefix">A:</div><div class="fc-text">${card?.a || ''}</div></div></div>`;
         div.addEventListener('click', () => div.classList.toggle('flipped'));
         container.appendChild(div);
     });
@@ -505,8 +482,7 @@ function renderFlashcards(cards) {
 
 function downloadNotes() {
     if(!currentNotes) return;
-    let text = `DELECTURED NOTES\n=================\n\nSUMMARY\n${currentNotes.notes?.summary || ''}\n\nCONCEPTS\n`;
-    currentNotes.notes?.concepts?.forEach(c => text += `- ${c.term}: ${c.explanation}\n`);
+    let text = `DELECTURED NOTES\n\nSUMMARY\n${currentNotes.notes?.summary || ''}\n\n`;
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'notes.txt'; a.click();

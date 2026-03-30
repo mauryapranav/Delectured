@@ -9,7 +9,7 @@
 <body>
     <!-- 1. Top info strip -->
     <div class="top-strip fade-up">
-        <span>DELECTURED v1.4.1 · WHISPER-TURBO · LLAMA-3.3-70B</span>
+        <span>DELECTURED v1.5 · WHISPER-TURBO · LLAMA-3.3-70B</span>
         <span id="api-status">API KEY: NOT SET</span>
     </div>
 
@@ -46,12 +46,12 @@
                     Every Word.<br>
                     Structured.
                 </h1>
-                <p class="tagline">v1.4.1 Visual Expert uses LLaMA 3.3 70B to produce exhaustive, high-density study materials with dynamic concept maps and responsive lecture DNA. Depth that scales with your lecture.</p>
+                <p class="tagline">v1.5 Restoration Engine uses LLaMA 3.3 70B to produce exhaustive, high-density study materials with dynamic concept maps and responsive lecture DNA.</p>
 
                 <table class="comparison-table" style="max-width: 600px; margin-top: 2rem;">
                     <tr>
                         <th>Generic AI (ChatGPT/Otter)</th>
-                        <th>DeLectured Visual Expert</th>
+                        <th>DeLectured v1.5 Expert</th>
                     </tr>
                     <tr>
                         <td>Fixed-length short summaries</td>
@@ -75,8 +75,8 @@
                 <div class="hero-visual">
                     <div class="circle-visual"></div>
                     <div style="font-family: var(--font-mono); font-size: 10px; color: var(--accent); position: absolute; bottom: 1rem; right: 1rem; text-align: right;">
-                        // VISUAL PIPELINE READY<br>
-                        // 70B MODEL ACTIVE
+                        // ENGINE READY<br>
+                        // LLAMA-3.3-70B ACTIVE
                     </div>
                 </div>
                 <a href="#upload-section" class="btn primary-btn" style="text-decoration:none; display:inline-block; width: 100%; text-align: center;">Start Structuring ?</a>
@@ -120,19 +120,15 @@
             </div>
             
             <div class="how-it-works-col">
-                <h2 style="margin-bottom:2rem;">Intelligence Engine</h2>
+                <h2 style="margin-bottom:2rem;">Expert Engine</h2>
                 <ul class="step-list">
                     <li class="step-item">
                         <h3>Parallel Whisper-Turbo</h3>
-                        <p>Audio is split into overlapping 10-minute chunks and transcribed simultaneously. MP3 compression ensures lightning-fast uploads even for 2-hour lectures.</p>
+                        <p>Audio is processed using Groq's high-speed API. We automatically chunk large lectures and optimize audio quality locally.</p>
                     </li>
                     <li class="step-item">
-                        <h3>Responsive Lecture DNA</h3>
-                        <p>Our algorithm maps concept density across the timeline, providing a visual heat-map of the most information-dense segments of the lecture.</p>
-                    </li>
-                    <li class="step-item">
-                        <h3>70B Visual Structuring</h3>
-                        <p>We use LLaMA 3.3 70B to generate complex Mermaid.js flowcharts and mindmaps that visualize the relationships between concepts, moving beyond static notes.</p>
+                        <h3>High-Density Intelligence</h3>
+                        <p>Our Stage 2 pass uses LLaMA 3.3 70B to extract deep insights, generating exhaustive technical summaries and complex concept maps.</p>
                     </li>
                 </ul>
             </div>
@@ -144,33 +140,26 @@
         
         <div class="result-card">
             <div id="badges-container" style="margin-bottom: 1rem;"></div>
-            <div class="score-annotation" id="score-annotation"></div>
-
             <div class="score-strip">
                 <div class="score-box">
                     <div class="label">CLARITY</div>
                     <div class="score-num" id="score-clarity">--</div>
-                    <div class="score-bar-container"><div class="score-bar"></div></div>
                 </div>
                 <div class="score-box">
                     <div class="label">DENSITY</div>
                     <div class="score-num" id="score-density">--</div>
-                    <div class="score-bar-container"><div class="score-bar"></div></div>
                 </div>
                 <div class="score-box">
                     <div class="label">PACE</div>
                     <div class="score-num" id="score-pace">--</div>
-                    <div class="score-bar-container"><div class="score-bar"></div></div>
                 </div>
                 <div class="score-box">
                     <div class="label">CONCEPTS</div>
                     <div class="score-num" id="score-concepts">--</div>
-                    <div class="score-bar-container"><div class="score-bar"></div></div>
                 </div>
                 <div class="score-box">
                     <div class="label">REVISION</div>
                     <div class="score-num" id="score-revision">--</div>
-                    <div class="score-bar-container"><div class="score-bar"></div></div>
                 </div>
             </div>
         </div>
@@ -187,15 +176,13 @@
         </div>
 
         <div class="result-card" id="concept-map-container" style="display:none;">
-            <div class="label" style="margin-bottom: 2rem;">DYNAMIC CONCEPT VISUALIZATION</div>
-            <div id="concept-map" class="mermaid" style="display: flex; justify-content: center; background: white; padding: 2rem; border-radius: 4px; border: 1px solid var(--border);"></div>
+            <div class="label" style="margin-bottom: 2rem;">CONCEPT VISUALIZATION</div>
+            <div id="concept-map" class="mermaid" style="background: white; padding: 2rem; border-radius: 4px; border: 1px solid var(--border);"></div>
         </div>
 
         <div class="result-card" id="exam-signals-container" style="display:none;">
             <div class="exam-signals" style="margin:0; border:none; background:transparent; padding:0;">
-                <div class="exam-signal-header">
-                    <span>⚠ EXAM SIGNALS DETECTED</span>
-                </div>
+                <div class="exam-signal-header"><span>⚠ EXAM SIGNALS DETECTED</span></div>
                 <div id="exam-signals-list"></div>
             </div>
         </div>
@@ -222,8 +209,7 @@
                 <div class="label" style="margin-bottom: 2rem; color: var(--accent);">ANNOTATIONS</div>
                 <div class="chat-history" id="chat-history"></div>
                 <div class="chat-input-wrapper">
-                    <span class="chat-icon">✎</span>
-                    <input type="text" id="chat-input" class="chat-input" placeholder="Ask a question about the lecture...">
+                    <input type="text" id="chat-input" class="chat-input" placeholder="Ask a question...">
                 </div>
             </div>
         </div>
@@ -240,7 +226,6 @@
             </div>
         </div>
 
-        <!-- Export -->
         <div style="margin-top: 2rem; display: flex; gap: 1rem; padding-bottom: 4rem;">
             <button class="btn" id="btn-download">Download .TXT</button>
             <button class="btn" id="btn-print">Print PDF</button>
@@ -248,16 +233,9 @@
 
     </section>
 
-    <!-- 9. Footer -->
     <footer>
-        <div>
-            <div class="footer-logo">DeLectured</div>
-            <div>Built by <a href="https://github.com/mauryapranav" target="_blank" rel="noopener">Pranav Kumar Maurya</a></div>
-        </div>
-        <div style="text-align: right;">
-            <div>Groq · Whisper-Turbo · LLaMA 3.3 70B</div>
-            <div>No audio data stored. Ever.</div>
-        </div>
+        <div><div class="footer-logo">DeLectured</div></div>
+        <div style="text-align: right;"><div>Groq · Whisper-Turbo · LLaMA 3.3 70B</div></div>
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
@@ -272,9 +250,7 @@
                 primaryBorderColor: '#C8402A',
                 lineColor: '#C8402A',
                 secondaryColor: '#1B4D8E',
-                tertiaryColor: '#EDE8DF',
-                mainBkg: '#F5F0E8',
-                nodeBorder: '#C8402A'
+                mainBkg: '#F5F0E8'
             }
         });
     </script>
