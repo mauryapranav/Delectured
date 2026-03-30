@@ -9,7 +9,7 @@
 <body>
     <!-- 1. Top info strip -->
     <div class="top-strip fade-up">
-        <span>DELECTURED v1.3 · WHISPER-TURBO · LLAMA-3.3-70B</span>
+        <span>DELECTURED v1.4.1 · WHISPER-TURBO · LLAMA-3.3-70B</span>
         <span id="api-status">API KEY: NOT SET</span>
     </div>
 
@@ -46,20 +46,20 @@
                     Every Word.<br>
                     Structured.
                 </h1>
-                <p class="tagline">Not just transcription. v1.3 "Expert" uses LLaMA 3.3 70B to produce exhaustive, high-density study materials that scale with your lecture length. 10 minutes or 2 hours—you get the full depth.</p>
+                <p class="tagline">v1.4.1 Visual Expert uses LLaMA 3.3 70B to produce exhaustive, high-density study materials with dynamic concept maps and responsive lecture DNA. Depth that scales with your lecture.</p>
 
                 <table class="comparison-table" style="max-width: 600px; margin-top: 2rem;">
                     <tr>
                         <th>Generic AI (ChatGPT/Otter)</th>
-                        <th>DeLectured v1.3 Expert</th>
+                        <th>DeLectured Visual Expert</th>
                     </tr>
                     <tr>
                         <td>Fixed-length short summaries</td>
-                        <td>Dynamic scaling (200-500 words)</td>
+                        <td>Dynamic scaling (300-500 words)</td>
                     </tr>
                     <tr>
                         <td>Flat bullet points</td>
-                        <td>Mermaid.js Concept Mindmaps</td>
+                        <td>Dynamic Flowchart Visualizations</td>
                     </tr>
                 </table>
 
@@ -75,8 +75,8 @@
                 <div class="hero-visual">
                     <div class="circle-visual"></div>
                     <div style="font-family: var(--font-mono); font-size: 10px; color: var(--accent); position: absolute; bottom: 1rem; right: 1rem; text-align: right;">
-                        // EXPERT PIPELINE READY<br>
-                        // LLAMA-3.3-70B ACTIVE
+                        // VISUAL PIPELINE READY<br>
+                        // 70B MODEL ACTIVE
                     </div>
                 </div>
                 <a href="#upload-section" class="btn primary-btn" style="text-decoration:none; display:inline-block; width: 100%; text-align: center;">Start Structuring ?</a>
@@ -120,19 +120,19 @@
             </div>
             
             <div class="how-it-works-col">
-                <h2 style="margin-bottom:2rem;">Expert Engine</h2>
+                <h2 style="margin-bottom:2rem;">Intelligence Engine</h2>
                 <ul class="step-list">
                     <li class="step-item">
-                        <h3>Speculative Transcription</h3>
-                        <p>We use Whisper-Turbo to process the first 10 minutes instantly. This allows the AI to start "thinking" about the subject while the rest of your 2-hour lecture is still uploading in parallel.</p>
+                        <h3>Parallel Whisper-Turbo</h3>
+                        <p>Audio is split into overlapping 10-minute chunks and transcribed simultaneously. MP3 compression ensures lightning-fast uploads even for 2-hour lectures.</p>
                     </li>
                     <li class="step-item">
-                        <h3>Contextual Overlap</h3>
-                        <p>Chunks are stitched with a 3-second overlap. The AI uses the first segment's "Technical Glossary" to ensure accuracy across the entire transcript, preventing jargon errors.</p>
+                        <h3>Responsive Lecture DNA</h3>
+                        <p>Our algorithm maps concept density across the timeline, providing a visual heat-map of the most information-dense segments of the lecture.</p>
                     </li>
                     <li class="step-item">
-                        <h3>70B Intelligent Structuring</h3>
-                        <p>The final pass uses LLaMA 3.3 70B—a model with massive reasoning capacity. It generates exhaustive summaries and concept maps that scale proportionally to the lecture's length.</p>
+                        <h3>70B Visual Structuring</h3>
+                        <p>We use LLaMA 3.3 70B to generate complex Mermaid.js flowcharts and mindmaps that visualize the relationships between concepts, moving beyond static notes.</p>
                     </li>
                 </ul>
             </div>
@@ -143,93 +143,81 @@
     <section class="results container" id="results">
         
         <div class="result-card">
-            <!-- Stage 1 Badges -->
             <div id="badges-container" style="margin-bottom: 1rem;"></div>
             <div class="score-annotation" id="score-annotation"></div>
 
-            <!-- Intelligence Score Strip -->
             <div class="score-strip">
                 <div class="score-box">
                     <div class="label">CLARITY</div>
                     <div class="score-num" id="score-clarity">--</div>
                     <div class="score-bar-container"><div class="score-bar"></div></div>
-                    <div class="label" id="lbl-clarity">--</div>
                 </div>
                 <div class="score-box">
-                    <div class="label">CONTENT DENSITY</div>
+                    <div class="label">DENSITY</div>
                     <div class="score-num" id="score-density">--</div>
                     <div class="score-bar-container"><div class="score-bar"></div></div>
-                    <div class="label" id="lbl-density">--</div>
                 </div>
                 <div class="score-box">
                     <div class="label">PACE</div>
                     <div class="score-num" id="score-pace">--</div>
                     <div class="score-bar-container"><div class="score-bar"></div></div>
-                    <div class="label" id="lbl-pace">--</div>
                 </div>
                 <div class="score-box">
                     <div class="label">CONCEPTS</div>
                     <div class="score-num" id="score-concepts">--</div>
                     <div class="score-bar-container"><div class="score-bar"></div></div>
-                    <div class="label" id="lbl-concepts">FOUND</div>
                 </div>
                 <div class="score-box">
                     <div class="label">REVISION</div>
                     <div class="score-num" id="score-revision">--</div>
                     <div class="score-bar-container"><div class="score-bar"></div></div>
-                    <div class="label" id="lbl-revision">MINUTES</div>
                 </div>
             </div>
         </div>
 
         <div class="result-card">
-            <!-- Summary Pullquote -->
             <div class="pullquote" id="summary-quote" style="margin:0;"></div>
         </div>
 
         <div class="result-card">
-            <!-- Lecture DNA -->
             <div class="dna-section">
-                <div class="label">LECTURE DNA — CONCEPT DENSITY ACROSS TIMELINE</div>
+                <div class="label">LECTURE DNA — CONCEPT DENSITY HEATMAP</div>
                 <div class="dna-bars" id="dna-bars"></div>
             </div>
         </div>
 
         <div class="result-card" id="concept-map-container" style="display:none;">
-            <!-- Concept Map -->
-            <div class="label" style="margin-bottom: 2rem;">CONCEPT MAP VISUALIZATION</div>
-            <div id="concept-map" class="mermaid" style="display: flex; justify-content: center; background: white; padding: 2rem; border-radius: 4px;"></div>
+            <div class="label" style="margin-bottom: 2rem;">DYNAMIC CONCEPT VISUALIZATION</div>
+            <div id="concept-map" class="mermaid" style="display: flex; justify-content: center; background: white; padding: 2rem; border-radius: 4px; border: 1px solid var(--border);"></div>
         </div>
 
         <div class="result-card" id="exam-signals-container" style="display:none;">
-            <!-- Exam Signals -->
             <div class="exam-signals" style="margin:0; border:none; background:transparent; padding:0;">
                 <div class="exam-signal-header">
                     <span>⚠ EXAM SIGNALS DETECTED</span>
-                    <span id="exam-signal-count"></span>
                 </div>
                 <div id="exam-signals-list"></div>
             </div>
         </div>
 
         <div class="result-card">
-            <!-- Notes Columns -->
-            <div class="notes-grid" style="grid-template-columns: 1fr 1fr; border-top:none; margin:0;">
+            <div class="notes-grid">
                 <div id="col-topics"></div>
                 <div id="col-concepts" style="border-left: 1px solid var(--border); padding-left: 2rem;"></div>
             </div>
         </div>
 
         <div class="result-card">
-            <!-- Flashcards -->
             <div class="flashcards-section" style="margin:0;">
-                <div class="label" style="margin-bottom: 2rem;">ACTIVE RECALL FLASHCARDS</div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                    <div class="label">ACTIVE RECALL FLASHCARDS</div>
+                    <button class="btn" id="btn-refresh-flashcards" style="font-size: 10px; padding: 0.3rem 0.8rem;">↻ REFRESH SET</button>
+                </div>
                 <div class="flashcards-grid" id="flashcards-grid"></div>
             </div>
         </div>
 
         <div class="result-card">
-            <!-- Annotations / Q&A -->
             <div class="annotations-section" style="margin:0; max-width: 100%;">
                 <div class="label" style="margin-bottom: 2rem; color: var(--accent);">ANNOTATIONS</div>
                 <div class="chat-history" id="chat-history"></div>
@@ -241,7 +229,6 @@
         </div>
 
         <div class="result-card">
-            <!-- Transcript -->
             <div class="transcript-section" style="margin:0; border:none; padding:0;">
                 <div class="transcript-header" id="transcript-header">
                     <span>RAW TRANSCRIPT</span>
@@ -274,7 +261,23 @@
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-    <script>mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'loose' });</script>
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: false, 
+            theme: 'base',
+            securityLevel: 'loose',
+            themeVariables: {
+                primaryColor: '#F5F0E8',
+                primaryTextColor: '#0A0A08',
+                primaryBorderColor: '#C8402A',
+                lineColor: '#C8402A',
+                secondaryColor: '#1B4D8E',
+                tertiaryColor: '#EDE8DF',
+                mainBkg: '#F5F0E8',
+                nodeBorder: '#C8402A'
+            }
+        });
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
     <script src="app.js"></script>
 </body>
