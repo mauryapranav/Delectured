@@ -373,7 +373,13 @@ function renderScore(score) {
     document.getElementById('score-revision').textContent = score.revision_mins || "--";
 }
 
-function renderPullquote(text) { document.getElementById('summary-quote').textContent = text; }
+function renderPullquote(text) { 
+    const el = document.getElementById('summary-quote');
+    if (el) {
+        // Preserves newlines from AI long-form response
+        el.innerHTML = text.replace(/\n/g, '<br>'); 
+    }
+}
 
 function renderDNA(dnaArray) {
     const container = document.getElementById('dna-bars');
