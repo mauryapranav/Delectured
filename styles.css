@@ -35,6 +35,28 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* Aesthetic Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--paper-2);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) var(--paper-2);
+}
 html { scroll-behavior: smooth; scroll-padding-top: 80px; }
 body { background-color: var(--paper); color: var(--text-primary); font-family: var(--font-sans); font-size: 15px; line-height: 1.7; transition: background-color 0.25s, color 0.25s; overflow-x: hidden; position: relative; }
 
