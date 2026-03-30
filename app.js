@@ -2,116 +2,8 @@
 // DeLectured - App Logic & Intelligence
 // ==========================================
 
-const MAX_SIZE = 25 * 1024 * 1024; // 25MB limit for Groq
-const CHUNK_DURATION = 10 * 60; // 10 minutes per chunk if we need to split
-const TARGET_SAMPLE_RATE = 16000;
-
-const ALLOWED_TYPES = [
-  'audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/ogg', 
-  'audio/flac', 'video/mp4', 'audio/webm', 'audio/amr', 'audio/aac'
-];
-
-// Audio Processing Utilities
-async function processAudioFile(file, logTerminal) {
-  logTerminal("[PROCESS] Decoding audio for optimization...");
-  const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: TARGET_SAMPLE_RATE });
-  
-  try {
-    const arrayBuffer = await file.arrayBuffer();
-    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-    
-    logTerminal(`[PROCESS] Audio decoded: ${audioBuffer.duration.toFixed(1)}s @ ${audioBuffer.sampleRate}Hz`);
-    
-    const chunks = [];
-    const chunkSamples = CHUNK_DURATION * TARGET_SAMPLE_RATE;
-    const totalSamples = audioBuffer.length;
-    
-    if (totalSamples > chunkSamples * 1.5 || (file.size > MAX_SIZE && audioBuffer.duration > 600)) {
-      logTerminal(`[PROCESS] File is large. Splitting into ${Math.ceil(totalSamples / chunkSamples)} segments...`);
-      for (let i = 0; i < totalSamples; i += chunkSamples) {
-        const end = Math.min(i + chunkSamples, totalSamples);
-        const chunkBuffer = audioCtx.createBuffer(1, end - i, TARGET_SAMPLE_RATE);
-        // Mix down to mono
-        const chanData = chunkBuffer.getChannelData(0);
-        for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
-          const data = audioBuffer.getChannelData(channel).subarray(i, end);
-          for (let s = 0; s < data.length; s++) {
-            chanData[s] += data[s] / audioBuffer.numberOfChannels;
-          }
-        }
-        chunks.push(chunkBuffer);
-      }
-    } else {
-      // Just mix down to mono if not already
-      if (audioBuffer.numberOfChannels > 1) {
-        const monoBuffer = audioCtx.createBuffer(1, audioBuffer.length, TARGET_SAMPLE_RATE);
-        const chanData = monoBuffer.getChannelData(0);
-        for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
-          const data = audioBuffer.getChannelData(channel);
-          for (let s = 0; s < data.length; s++) {
-            chanData[s] += data[s] / audioBuffer.numberOfChannels;
-          }
-        }
-        chunks.push(monoBuffer);
-      } else {
-        chunks.push(audioBuffer);
-      }
-    }
-    
-    const blobs = await Promise.all(chunks.map(buffer => audioBufferToWavBlob(buffer)));
-    return blobs;
-  } catch (e) {
-    console.error(e);
-    throw new Error("Failed to process audio. The format might be unsupported by your browser or the file is corrupted.");
-  } finally {
-    audioCtx.close();
-  }
-}
-
-function audioBufferToWavBlob(buffer) {
-  const numChannels = 1;
-  const sampleRate = buffer.sampleRate;
-  const format = 1; // PCM
-  const bitDepth = 16;
-  
-  const bytesPerSample = bitDepth / 8;
-  const blockAlign = numChannels * bytesPerSample;
-  
-  const dataLen = buffer.length * blockAlign;
-  const bufferLen = 44 + dataLen;
-  const arrayBuffer = new ArrayBuffer(bufferLen);
-  const view = new DataView(arrayBuffer);
-  
-  const writeString = (offset, string) => {
-    for (let i = 0; i < string.length; i++) {
-      view.setUint8(offset + i, string.charCodeAt(i));
-    }
-  };
-  
-  writeString(0, 'RIFF');
-  view.setUint32(4, 36 + dataLen, true);
-  writeString(8, 'WAVE');
-  writeString(12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, format, true);
-  view.setUint16(22, numChannels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * blockAlign, true);
-  view.setUint16(32, blockAlign, true);
-  view.setUint16(34, bitDepth, true);
-  writeString(36, 'data');
-  view.setUint32(40, dataLen, true);
-  
-  const channelData = buffer.getChannelData(0);
-  let offset = 44;
-  for (let i = 0; i < channelData.length; i++) {
-    const sample = Math.max(-1, Math.min(1, channelData[i]));
-    view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
-    offset += 2;
-  }
-  
-  return new Blob([arrayBuffer], { type: 'audio/wav' });
-}
+const MAX_SIZE = 25 * 1024 * 1024; // 25MB
+const ALLOWED_TYPES = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/ogg', 'audio/flac', 'video/mp4'];
 let apiKey = localStorage.getItem('groq_api_key') || '';
 let currentTranscript = '';
 let currentNotes = null;
@@ -264,16 +156,6 @@ function updateApiStatus() {
 // Core Pipeline
 // ==========================================
 
-function updateProgress(percent, label) {
-  const container = document.getElementById('progress-container');
-  const fill = document.getElementById('progress-bar-fill');
-  const lbl = document.getElementById('progress-label');
-  
-  container.style.display = 'block';
-  fill.style.width = `${percent}%`;
-  if (label) lbl.textContent = label.toUpperCase();
-}
-
 async function handleFile(file) {
   if (!apiKey) {
     els.apiPanel.classList.add('active');
@@ -282,14 +164,12 @@ async function handleFile(file) {
     return;
   }
 
-  // We now allow larger files because we process them
-  // But let's keep a reasonable limit for browser memory (e.g. 1GB)
-  if (file.size > 1024 * 1024 * 1024) {
-    alert("File is too large for browser-based processing (>1GB).");
+  if (file.size > MAX_SIZE) {
+    alert("File too large. Maximum size is 25MB.");
     return;
   }
 
-  if (!ALLOWED_TYPES.includes(file.type) && !file.name.endsWith('.m4a') && !file.name.endsWith('.aac')) {
+  if (!ALLOWED_TYPES.includes(file.type) && !file.name.endsWith('.m4a')) {
     alert("Unsupported file type. Please upload an audio file.");
     return;
   }
@@ -300,33 +180,17 @@ async function handleFile(file) {
   els.terminalContent.innerHTML = '';
   document.getElementById('results').style.display = 'none';
   
-  updateProgress(5, "Initializing...");
-  logTerminal("Initializing DeLectured pipeline v1.1");
-  logTerminal(`Input: ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)`);
+  logTerminal("Initializing audio pipeline");
+  logTerminal(`File: ${file.name} · Size: ${(file.size/1024/1024).toFixed(1)} MB`);
   
   try {
-    // 1. Process & Transcribe
-    updateProgress(10, "Decoding Audio...");
-    const audioBlobs = await processAudioFile(file, logTerminal);
-    let fullTranscript = "";
+    // 1. Transcribe
+    logTerminal("[WHISPER] Uploading to whisper-large-v3...");
+    const rawTranscript = await transcribeAudio(file);
     
-    for (let i = 0; i < audioBlobs.length; i++) {
-      const partNum = i + 1;
-      const totalParts = audioBlobs.length;
-      const progressBase = 15;
-      const progressRange = 60; // 15% to 75% for transcription
-      const currentProgress = progressBase + ((i / totalParts) * progressRange);
-      
-      const progressLabel = totalParts > 1 ? `Transcribing Part ${partNum}/${totalParts}...` : "Transcribing...";
-      updateProgress(currentProgress, progressLabel);
-      
-      logTerminal(`[WHISPER] ${progressLabel}`);
-      const transcriptPart = await transcribeAudio(audioBlobs[i]);
-      fullTranscript += transcriptPart + " ";
-    }
-    
-    updateProgress(75, "Cleaning Transcript...");
-    const transcript = cleanTranscript(fullTranscript);
+    // 2. Client clean & check
+    logTerminal("[PROCESS] Cleaning and analyzing raw transcript...");
+    const transcript = cleanTranscript(rawTranscript);
     currentTranscript = transcript;
     
     if (transcript.split(' ').length < 50) {
@@ -339,21 +203,21 @@ async function handleFile(file) {
     const signals = findExamSignals(transcript);
     
     // 3. Stage 1 - Fast Analysis
-    updateProgress(80, "Stage 1 Analysis...");
     logTerminal("[STAGE 1] Analyzing lecture structure and domain...");
     const analysis = await analyzeTranscriptStage1(transcript);
     logTerminal(`[STAGE 1] Domain: ${analysis.domain} · Subject: ${analysis.subject}`);
+    logTerminal(`[STAGE 1] Structure: Intro ${analysis.structure.intro_pct}% · Core ${analysis.structure.core_pct}%`);
     
     renderStage1Badges(analysis);
     
-    // 4. Stage 2 - Domain-aware structuring
-    updateProgress(90, "Stage 2 Structuring...");
+    // 4. Stage 2 - Domain-aware structuring (Streaming)
     logTerminal("[STAGE 2] Generating domain-aware structured notes...");
     
+    // Simulate streaming UI (since we might fetch it whole or stream depending on exact impl)
+    // We will do a regular fetch but parse it as JSON
     const notesJson = await generateNotesStage2(transcript, analysis, signals);
     currentNotes = notesJson;
     
-    updateProgress(100, "Complete");
     logTerminal("[STAGE 2] Rendering results...");
     
     // Render
@@ -371,9 +235,6 @@ async function handleFile(file) {
     }
     renderNotesGrid(notesJson.notes);
     renderFlashcards(notesJson.flashcards);
-    if(notesJson.concept_map) {
-        renderConceptMap(notesJson.concept_map);
-    }
 
     // Apply fade up animation to rendered elements
     document.querySelectorAll('.results > *').forEach((el, i) => {
@@ -509,7 +370,6 @@ Using this context, structure the transcript into intelligent notes. Return ONLY
     "important": ["point 1"],
     "questions": ["question raised 1"]
   },
-  "concept_map": "mermaid code for a flowchart or mindmap connecting the main concepts. Use 'graph TD' or 'mindmap'. Keep it simple but accurate.",
   "score": {
     "clarity": 75,
     "clarity_label": "Good",
@@ -821,22 +681,6 @@ function renderNotesGrid(notes) {
         `;
     });
     conceptsCol.innerHTML = cHtml;
-}
-
-function renderConceptMap(mermaidCode) {
-    const container = document.getElementById('concept-map-container');
-    const target = document.getElementById('concept-map');
-    
-    container.style.display = 'block';
-    target.innerHTML = mermaidCode;
-    target.removeAttribute('data-processed');
-    
-    try {
-        mermaid.contentLoaded();
-    } catch (e) {
-        console.error("Mermaid error:", e);
-        container.style.display = 'none';
-    }
 }
 
 function renderFlashcards(cards) {
