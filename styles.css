@@ -135,6 +135,20 @@ nav { display: flex; justify-content: space-between; align-items: center; paddin
 .progress-bar-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s ease; }
 .terminal-line { margin-bottom: 0.5rem; }
 
+/* Fixed: Retry button contrast */
+.terminal-retry-btn {
+  background: var(--accent) !important;
+  color: white !important;
+  border: 2px solid white !important;
+  padding: 0.8rem 2rem !important;
+  margin-top: 1.5rem;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  font-weight: bold;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  display: block;
+}
+
 /* Results Section */
 .results { display: none; padding: 4rem 2rem; }
 .score-annotation { font-family: var(--font-mono); font-size: 12px; color: var(--text-tertiary); margin-bottom: 1rem; }
