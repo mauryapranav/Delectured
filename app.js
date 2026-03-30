@@ -1,11 +1,11 @@
 // ==========================================
-// DeLectured v1.6.2 - Final Stability
+// DeLectured v1.6.4 - Async Performance
 // ==========================================
 
 const MAX_SIZE = 25 * 1024 * 1024;
 const CHUNK_DURATION = 10 * 60; 
 const TARGET_SAMPLE_RATE = 16000;
-const CONCURRENCY_LIMIT = 3; 
+const CONCURRENCY_LIMIT = 2; 
 const CHUNK_OVERLAP_S = 3; 
 
 const ALLOWED_TYPES = [
@@ -21,10 +21,12 @@ async function processAudioFile(file) {
     const arrayBuffer = await file.arrayBuffer();
     const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
     logTerminal(`[1/5] PREPARING AUDIO: Decoded ${audioBuffer.duration.toFixed(0)}s`, true);
+    
     const chunks = [];
     const overlapSamples = CHUNK_OVERLAP_S * TARGET_SAMPLE_RATE;
     const chunkSamples = CHUNK_DURATION * TARGET_SAMPLE_RATE;
     const totalSamples = audioBuffer.length;
+    
     for (let i = 0; i < totalSamples; i += (chunkSamples - overlapSamples)) {
       const end = Math.min(i + chunkSamples, totalSamples);
       const chunkBuffer = audioCtx.createBuffer(1, end - i, TARGET_SAMPLE_RATE);
@@ -36,34 +38,44 @@ async function processAudioFile(file) {
       chunks.push(chunkBuffer);
       if (end === totalSamples) break;
     }
+    
     const blobs = [];
     for (let i = 0; i < chunks.length; i++) {
-        logTerminal(`[1/5] PREPARING AUDIO: Compressing segment ${i+1}/${chunks.length}...`, true);
-        updateProgress(10 + (i/chunks.length)*10, `Encoding...`);
-        blobs.push(audioBufferToMp3Blob(chunks[i]));
+        logTerminal(`[1/5] PREPARING AUDIO: Encoding segment ${i+1}/${chunks.length}...`, true);
+        updateProgress(10 + (i/chunks.length)*10, `MP3 Encoding...`);
+        // Use the new async-friendly encoder
+        blobs.push(await audioBufferToMp3BlobAsync(chunks[i]));
     }
     logTerminal(`[1/5] PREPARING AUDIO: Complete`, true);
     return blobs;
   } catch (e) { throw new Error("Audio decoding failed."); } finally { audioCtx.close(); }
 }
 
-function audioBufferToMp3Blob(buffer) {
+// Fixed: Added async yielding to prevent UI freezing
+async function audioBufferToMp3BlobAsync(buffer) {
   const channels = 1;
   const sampleRate = buffer.sampleRate;
   const mp3encoder = new lamejs.Mp3Encoder(channels, sampleRate, 64);
   const samples = buffer.getChannelData(0);
   const samplesInt16 = new Int16Array(samples.length);
+  
+  // Convert samples in small chunks to keep UI alive
   for (let i = 0; i < samples.length; i++) {
     const s = Math.max(-1, Math.min(1, samples[i]));
     samplesInt16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    if (i % 100000 === 0) await new Promise(r => setTimeout(r, 0)); 
   }
+  
   const mp3Data = [];
   const sampleBlockSize = 1152;
   for (let i = 0; i < samplesInt16.length; i += sampleBlockSize) {
     const chunk = samplesInt16.subarray(i, i + sampleBlockSize);
     const mp3buf = mp3encoder.encodeBuffer(chunk);
     if (mp3buf.length > 0) mp3Data.push(mp3buf);
+    // Yield every 500 blocks
+    if (i % (sampleBlockSize * 500) === 0) await new Promise(r => setTimeout(r, 0));
   }
+  
   const finish = mp3encoder.flush();
   if (finish.length > 0) mp3Data.push(finish);
   return new Blob(mp3Data, { type: 'audio/mpeg' });
@@ -126,7 +138,7 @@ function init() {
   
   if (els.processAnother) {
     els.processAnother.addEventListener('click', () => {
-        if (confirm("Save your notes first! Resetting will clear current results. Proceed?")) {
+        if (confirm("Reset and process another lecture? All current data will be cleared.")) {
             location.reload();
         }
     });
@@ -173,7 +185,7 @@ async function handleFile(file) {
   document.getElementById('results').style.display = 'none';
   
   updateProgress(5, "Initializing...");
-  logTerminal("DeLectured v1.6.2 - Stability Engine Engaged");
+  logTerminal("DeLectured v1.6.4 Engaged (Async Mode)");
   
   try {
     const audioBlobs = await processAudioFile(file);
@@ -188,7 +200,7 @@ async function handleFile(file) {
           try {
             results[idx] = await transcribeAudio(audioBlobs[idx]);
             completed++;
-            logTerminal(`[2/5] TRANSCRIBING LECTURE: Received part ${completed}/${audioBlobs.length}...`, true);
+            logTerminal(`[2/5] TRANSCRIBING LECTURE: Part ${completed}/${audioBlobs.length} received`, true);
             updateProgress(20 + (completed/audioBlobs.length)*50, `Transcribing...`);
           } catch (e) {
             results[idx] = await transcribeAudio(audioBlobs[idx]);
@@ -207,13 +219,13 @@ async function handleFile(file) {
     logTerminal("[3/5] ANALYZING LECTURE DOMAIN");
     const analysis = await analyzeTranscriptStage1(fullTranscript);
     
-    updateProgress(85, "Expert Intelligence...");
-    logTerminal("[4/5] GENERATING HIGH-DENSITY STUDY GUIDE (70B)");
+    updateProgress(85, "Intelligence Engine...");
+    logTerminal("[4/5] GENERATING STUDY GUIDE (70B)");
     const notesJson = await generateNotesStage2(fullTranscript, analysis);
     currentNotes = notesJson;
     
-    updateProgress(95, "Rendering Results...");
-    logTerminal("[5/5] FINALIZING VISUALS");
+    updateProgress(95, "Finalizing Visuals...");
+    logTerminal("[5/5] RENDERING RESULTS");
     
     els.terminal.style.display = 'none';
     els.results.style.display = 'block';
@@ -271,14 +283,13 @@ async function generateNotesStage2(transcript, analysis) {
     const wordCount = transcript.split(' ').length;
     const prompt = `You are a Subject Matter Expert in ${analysis.domain}. 
     TASK: Transform this ${wordCount}-word transcript into an EXHAUSTIVE, high-density study guide.
-    STRICT REQUIREMENTS:
-    1. SUMMARY: Provide a deep technical insight explaining the core thesis (MINIMUM 500 words).
-    2. CONCEPTS: Extract at least 20 technical concepts with deep academic definitions.
-    3. CONCEPT MAP: Return complex Mermaid.js graph TD code with rounded nodes.
+    1. SUMMARY: Minimum 500 words technical explaining the core thesis.
+    2. CONCEPTS: Extract 20 concepts with deep definitions.
+    3. CONCEPT MAP: Mermaid.js graph TD code.
     Return ONLY valid JSON:
     {
       "notes": {
-        "summary": "Deep technical analysis (500+ words)...",
+        "summary": "Full detailed analysis (500+ words)...",
         "topics": ["Topic 1", "..."],
         "concepts": [{ "term": "...", "explanation": "Deep academic definition...", "confidence": 1-3 }],
         "important": ["Insight 1", "..."],
