@@ -2,8 +2,117 @@
 // DeLectured - App Logic & Intelligence
 // ==========================================
 
-const MAX_SIZE = 25 * 1024 * 1024; // 25MB
-const ALLOWED_TYPES = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/ogg', 'audio/flac', 'video/mp4'];
+const MAX_SIZE = 25 * 1024 * 1024; // 25MB limit for Groq
+const CHUNK_DURATION = 10 * 60; // 10 minutes per chunk if we need to split
+const TARGET_SAMPLE_RATE = 16000;
+
+const ALLOWED_TYPES = [
+  'audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/ogg', 
+  'audio/flac', 'video/mp4', 'audio/webm', 'audio/amr', 'audio/aac'
+];
+
+// Audio Processing Utilities
+async function processAudioFile(file, logTerminal) {
+  logTerminal("[PROCESS] Decoding audio for optimization...");
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: TARGET_SAMPLE_RATE });
+  
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    
+    logTerminal(`[PROCESS] Audio decoded: ${audioBuffer.duration.toFixed(1)}s @ ${audioBuffer.sampleRate}Hz`);
+    
+    const chunks = [];
+    const chunkSamples = CHUNK_DURATION * TARGET_SAMPLE_RATE;
+    const totalSamples = audioBuffer.length;
+    
+    if (totalSamples > chunkSamples * 1.5 || (file.size > MAX_SIZE && audioBuffer.duration > 600)) {
+      logTerminal(`[PROCESS] File is large. Splitting into ${Math.ceil(totalSamples / chunkSamples)} segments...`);
+      for (let i = 0; i < totalSamples; i += chunkSamples) {
+        const end = Math.min(i + chunkSamples, totalSamples);
+        const chunkBuffer = audioCtx.createBuffer(1, end - i, TARGET_SAMPLE_RATE);
+        // Mix down to mono
+        const chanData = chunkBuffer.getChannelData(0);
+        for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
+          const data = audioBuffer.getChannelData(channel).subarray(i, end);
+          for (let s = 0; s < data.length; s++) {
+            chanData[s] += data[s] / audioBuffer.numberOfChannels;
+          }
+        }
+        chunks.push(chunkBuffer);
+      }
+    } else {
+      // Just mix down to mono if not already
+      if (audioBuffer.numberOfChannels > 1) {
+        const monoBuffer = audioCtx.createBuffer(1, audioBuffer.length, TARGET_SAMPLE_RATE);
+        const chanData = monoBuffer.getChannelData(0);
+        for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
+          const data = audioBuffer.getChannelData(channel);
+          for (let s = 0; s < data.length; s++) {
+            chanData[s] += data[s] / audioBuffer.numberOfChannels;
+          }
+        }
+        chunks.push(monoBuffer);
+      } else {
+        chunks.push(audioBuffer);
+      }
+    }
+    
+    const blobs = await Promise.all(chunks.map(buffer => audioBufferToWavBlob(buffer)));
+    return blobs;
+  } catch (e) {
+    console.error(e);
+    throw new Error("Failed to process audio. The format might be unsupported by your browser or the file is corrupted.");
+  } finally {
+    audioCtx.close();
+  }
+}
+
+function audioBufferToWavBlob(buffer) {
+  const numChannels = 1;
+  const sampleRate = buffer.sampleRate;
+  const format = 1; // PCM
+  const bitDepth = 16;
+  
+  const bytesPerSample = bitDepth / 8;
+  const blockAlign = numChannels * bytesPerSample;
+  
+  const dataLen = buffer.length * blockAlign;
+  const bufferLen = 44 + dataLen;
+  const arrayBuffer = new ArrayBuffer(bufferLen);
+  const view = new DataView(arrayBuffer);
+  
+  const writeString = (offset, string) => {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  };
+  
+  writeString(0, 'RIFF');
+  view.setUint32(4, 36 + dataLen, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, format, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * blockAlign, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitDepth, true);
+  writeString(36, 'data');
+  view.setUint32(40, dataLen, true);
+  
+  const channelData = buffer.getChannelData(0);
+  let offset = 44;
+  for (let i = 0; i < channelData.length; i++) {
+    const sample = Math.max(-1, Math.min(1, channelData[i]));
+    view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+    offset += 2;
+  }
+  
+  return new Blob([arrayBuffer], { type: 'audio/wav' });
+}
+
 let apiKey = localStorage.getItem('groq_api_key') || '';
 let currentTranscript = '';
 let currentNotes = null;
@@ -156,6 +265,16 @@ function updateApiStatus() {
 // Core Pipeline
 // ==========================================
 
+function updateProgress(percent, label) {
+  const container = document.getElementById('progress-container');
+  const fill = document.getElementById('progress-bar-fill');
+  const lbl = document.getElementById('progress-label');
+  
+  if (container) container.style.display = 'block';
+  if (fill) fill.style.width = `${percent}%`;
+  if (label && lbl) lbl.textContent = label.toUpperCase();
+}
+
 async function handleFile(file) {
   if (!apiKey) {
     els.apiPanel.classList.add('active');
@@ -164,12 +283,13 @@ async function handleFile(file) {
     return;
   }
 
-  if (file.size > MAX_SIZE) {
-    alert("File too large. Maximum size is 25MB.");
+  // Support up to 1GB
+  if (file.size > 1024 * 1024 * 1024) {
+    alert("File is too large for browser-based processing (>1GB).");
     return;
   }
 
-  if (!ALLOWED_TYPES.includes(file.type) && !file.name.endsWith('.m4a')) {
+  if (!ALLOWED_TYPES.includes(file.type) && !file.name.endsWith('.m4a') && !file.name.endsWith('.aac')) {
     alert("Unsupported file type. Please upload an audio file.");
     return;
   }
@@ -180,17 +300,33 @@ async function handleFile(file) {
   els.terminalContent.innerHTML = '';
   document.getElementById('results').style.display = 'none';
   
-  logTerminal("Initializing audio pipeline");
-  logTerminal(`File: ${file.name} · Size: ${(file.size/1024/1024).toFixed(1)} MB`);
+  updateProgress(5, "Initializing...");
+  logTerminal("Initializing DeLectured pipeline v1.1");
+  logTerminal(`Input: ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)`);
   
   try {
-    // 1. Transcribe
-    logTerminal("[WHISPER] Uploading to whisper-large-v3...");
-    const rawTranscript = await transcribeAudio(file);
+    // 1. Process & Transcribe
+    updateProgress(10, "Decoding Audio...");
+    const audioBlobs = await processAudioFile(file, logTerminal);
+    let fullTranscript = "";
     
-    // 2. Client clean & check
-    logTerminal("[PROCESS] Cleaning and analyzing raw transcript...");
-    const transcript = cleanTranscript(rawTranscript);
+    for (let i = 0; i < audioBlobs.length; i++) {
+      const partNum = i + 1;
+      const totalParts = audioBlobs.length;
+      const progressBase = 15;
+      const progressRange = 60; // 15% to 75% for transcription
+      const currentProgress = progressBase + ((i / totalParts) * progressRange);
+      
+      const progressLabel = totalParts > 1 ? `Transcribing Part ${partNum}/${totalParts}...` : "Transcribing...";
+      updateProgress(currentProgress, progressLabel);
+      
+      logTerminal(`[WHISPER] ${progressLabel}`);
+      const transcriptPart = await transcribeAudio(audioBlobs[i]);
+      fullTranscript += transcriptPart + " ";
+    }
+    
+    updateProgress(75, "Cleaning Transcript...");
+    const transcript = cleanTranscript(fullTranscript);
     currentTranscript = transcript;
     
     if (transcript.split(' ').length < 50) {
@@ -203,21 +339,21 @@ async function handleFile(file) {
     const signals = findExamSignals(transcript);
     
     // 3. Stage 1 - Fast Analysis
+    updateProgress(80, "Stage 1 Analysis...");
     logTerminal("[STAGE 1] Analyzing lecture structure and domain...");
     const analysis = await analyzeTranscriptStage1(transcript);
     logTerminal(`[STAGE 1] Domain: ${analysis.domain} · Subject: ${analysis.subject}`);
-    logTerminal(`[STAGE 1] Structure: Intro ${analysis.structure.intro_pct}% · Core ${analysis.structure.core_pct}%`);
     
     renderStage1Badges(analysis);
     
-    // 4. Stage 2 - Domain-aware structuring (Streaming)
+    // 4. Stage 2 - Domain-aware structuring
+    updateProgress(90, "Stage 2 Structuring...");
     logTerminal("[STAGE 2] Generating domain-aware structured notes...");
     
-    // Simulate streaming UI (since we might fetch it whole or stream depending on exact impl)
-    // We will do a regular fetch but parse it as JSON
     const notesJson = await generateNotesStage2(transcript, analysis, signals);
     currentNotes = notesJson;
     
+    updateProgress(100, "Complete");
     logTerminal("[STAGE 2] Rendering results...");
     
     // Render
@@ -235,6 +371,9 @@ async function handleFile(file) {
     }
     renderNotesGrid(notesJson.notes);
     renderFlashcards(notesJson.flashcards);
+    if(notesJson.concept_map) {
+        renderConceptMap(notesJson.concept_map);
+    }
 
     // Apply fade up animation to rendered elements
     document.querySelectorAll('.results > *').forEach((el, i) => {
@@ -370,6 +509,7 @@ Using this context, structure the transcript into intelligent notes. Return ONLY
     "important": ["point 1"],
     "questions": ["question raised 1"]
   },
+  "concept_map": "mermaid code for a flowchart or mindmap connecting the main concepts. Use 'graph TD' or 'mindmap'. Keep it simple but accurate.",
   "score": {
     "clarity": 75,
     "clarity_label": "Good",
@@ -553,6 +693,7 @@ function findExamSignals(text) {
 
 function renderStage1Badges(analysis) {
     const container = document.getElementById('badges-container');
+    if (!container) return;
     container.innerHTML = `
         <span class="badge badge-domain">◆ ${analysis.domain.toUpperCase()} / ${analysis.subject.toUpperCase()}</span>
     `;
@@ -561,48 +702,55 @@ function renderStage1Badges(analysis) {
             <span class="badge badge-hinglish">◆ HINGLISH DETECTED — ${analysis.language.hindi_pct}% HINDI</span>
         `;
     }
-    document.getElementById('score-annotation').textContent = `// stage-1 analysis · ${currentTranscript.split(' ').length} words · domain: ${analysis.domain.toLowerCase()}`;
+    const scoreAnn = document.getElementById('score-annotation');
+    if (scoreAnn) scoreAnn.textContent = `// stage-1 analysis · ${currentTranscript.split(' ').length} words · domain: ${analysis.domain.toLowerCase()}`;
 }
 
 function renderScore(score) {
-    document.getElementById('score-clarity').textContent = score.clarity;
-    document.getElementById('lbl-clarity').textContent = score.clarity_label;
-    
-    document.getElementById('score-density').textContent = score.density;
-    document.getElementById('lbl-density').textContent = score.density_label;
-    
-    document.getElementById('score-pace').textContent = score.pace;
-    document.getElementById('lbl-pace').textContent = score.pace_label;
-    
-    document.getElementById('score-concepts').textContent = score.concept_count;
-    document.getElementById('lbl-concepts').textContent = "FOUND";
-    
-    document.getElementById('score-revision').textContent = score.revision_mins;
-    document.getElementById('lbl-revision').textContent = "MINUTES";
+    const ids = ['score-clarity', 'lbl-clarity', 'score-density', 'lbl-density', 'score-pace', 'lbl-pace', 'score-concepts', 'lbl-concepts', 'score-revision', 'lbl-revision'];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (id === 'score-clarity') el.textContent = score.clarity;
+        if (id === 'lbl-clarity') el.textContent = score.clarity_label;
+        if (id === 'score-density') el.textContent = score.density;
+        if (id === 'lbl-density') el.textContent = score.density_label;
+        if (id === 'score-pace') el.textContent = score.pace;
+        if (id === 'lbl-pace') el.textContent = score.pace_label;
+        if (id === 'score-concepts') el.textContent = score.concept_count;
+        if (id === 'lbl-concepts') el.textContent = "FOUND";
+        if (id === 'score-revision') el.textContent = score.revision_mins;
+        if (id === 'lbl-revision') el.textContent = "MINUTES";
+    });
 
     // Animate bars using IntersectionObserver
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if(entry.isIntersecting) {
                 const bars = document.querySelectorAll('.score-bar');
-                bars[0].style.width = score.clarity + '%';
-                bars[1].style.width = score.density + '%';
-                bars[2].style.width = score.pace + '%';
-                bars[3].style.width = Math.min(100, score.concept_count * 10) + '%';
-                bars[4].style.width = Math.min(100, (score.revision_mins/60)*100) + '%';
+                if (bars.length >= 5) {
+                    bars[0].style.width = score.clarity + '%';
+                    bars[1].style.width = score.density + '%';
+                    bars[2].style.width = score.pace + '%';
+                    bars[3].style.width = Math.min(100, score.concept_count * 10) + '%';
+                    bars[4].style.width = Math.min(100, (score.revision_mins/60)*100) + '%';
+                }
                 observer.disconnect();
             }
         });
     });
-    observer.observe(document.querySelector('.score-strip'));
+    const strip = document.querySelector('.score-strip');
+    if (strip) observer.observe(strip);
 }
 
 function renderPullquote(text) {
-    document.getElementById('summary-quote').textContent = text;
+    const el = document.getElementById('summary-quote');
+    if (el) el.textContent = text;
 }
 
 function renderDNA(dnaArray) {
     const container = document.getElementById('dna-bars');
+    if (!container) return;
     container.innerHTML = '';
     dnaArray.forEach((val, i) => {
         const bar = document.createElement('div');
@@ -620,6 +768,7 @@ function renderDNA(dnaArray) {
 
 function renderExamSignals(signals) {
     const container = document.getElementById('exam-signals-container');
+    if(!container) return;
     if(!signals || signals.length === 0) {
         container.style.display = 'none';
         return;
@@ -627,9 +776,11 @@ function renderExamSignals(signals) {
     container.style.display = 'block';
     
     const list = document.getElementById('exam-signals-list');
+    if (!list) return;
     list.innerHTML = '';
     
-    document.getElementById('exam-signal-count').textContent = `[${signals.length} signal${signals.length > 1 ? 's' : ''}]`;
+    const countEl = document.getElementById('exam-signal-count');
+    if (countEl) countEl.textContent = `[${signals.length} signal${signals.length > 1 ? 's' : ''}]`;
     
     signals.forEach(sig => {
         const div = document.createElement('div');
@@ -643,48 +794,70 @@ function renderNotesGrid(notes) {
     const topicsCol = document.getElementById('col-topics');
     const conceptsCol = document.getElementById('col-concepts');
     
-    topicsCol.innerHTML = '';
-    conceptsCol.innerHTML = '';
-    
-    // Topics & Important
-    let html = '';
-    notes.topics.forEach(t => {
-        html += `<div class="notes-item"><strong>→ ${t}</strong></div>`;
-    });
-    
-    html += `<div class="notes-col-header" style="margin-top:2rem">Key Takeaways</div>`;
-    notes.important.forEach(i => {
-        html += `<div class="notes-item">${i}</div>`;
-    });
-    
-    html += `<div class="notes-col-header" style="margin-top:2rem">Structure</div>`;
-    html += `<div class="notes-item mono-data"><strong>INTRO:</strong> ${notes.structure_summary.intro}</div>`;
-    html += `<div class="notes-item mono-data"><strong>CORE:</strong> ${notes.structure_summary.core}</div>`;
-    
-    topicsCol.innerHTML = html;
-    
-    // Concepts
-    let cHtml = '';
-    notes.concepts.forEach(c => {
-        const dots = Array(3).fill(0).map((_, i) => 
-            `<span class="dot ${i < c.confidence ? 'filled' : ''}"></span>`
-        ).join('');
+    if (topicsCol) {
+        topicsCol.innerHTML = '';
+        // Topics & Important
+        let html = '';
+        notes.topics.forEach(t => {
+            html += `<div class="notes-item"><strong>→ ${t}</strong></div>`;
+        });
         
-        cHtml += `
-            <div class="notes-item">
-                <div class="concept-header">
-                    <span class="concept-term">${c.term}</span>
-                    <span class="confidence-dots">${dots}</span>
+        html += `<div class="notes-col-header" style="margin-top:2rem">Key Takeaways</div>`;
+        notes.important.forEach(i => {
+            html += `<div class="notes-item">${i}</div>`;
+        });
+        
+        html += `<div class="notes-col-header" style="margin-top:2rem">Structure</div>`;
+        html += `<div class="notes-item mono-data"><strong>INTRO:</strong> ${notes.structure_summary.intro}</div>`;
+        html += `<div class="notes-item mono-data"><strong>CORE:</strong> ${notes.structure_summary.core}</div>`;
+        topicsCol.innerHTML = html;
+    }
+    
+    if (conceptsCol) {
+        conceptsCol.innerHTML = '';
+        let cHtml = '';
+        notes.concepts.forEach(c => {
+            const dots = Array(3).fill(0).map((_, i) => 
+                `<span class="dot ${i < c.confidence ? 'filled' : ''}"></span>`
+            ).join('');
+            
+            cHtml += `
+                <div class="notes-item">
+                    <div class="concept-header">
+                        <span class="concept-term">${c.term}</span>
+                        <span class="confidence-dots">${dots}</span>
+                    </div>
+                    <div style="font-size:13px; color:var(--text-secondary)">${c.explanation}</div>
                 </div>
-                <div style="font-size:13px; color:var(--text-secondary)">${c.explanation}</div>
-            </div>
-        `;
-    });
-    conceptsCol.innerHTML = cHtml;
+            `;
+        });
+        conceptsCol.innerHTML = cHtml;
+    }
+}
+
+function renderConceptMap(mermaidCode) {
+    const container = document.getElementById('concept-map-container');
+    const target = document.getElementById('concept-map');
+    
+    if (!container || !target) return;
+    
+    container.style.display = 'block';
+    target.innerHTML = mermaidCode;
+    target.removeAttribute('data-processed');
+    
+    try {
+        if (typeof mermaid !== 'undefined') {
+            mermaid.contentLoaded();
+        }
+    } catch (e) {
+        console.error("Mermaid error:", e);
+        container.style.display = 'none';
+    }
 }
 
 function renderFlashcards(cards) {
     const container = document.getElementById('flashcards-grid');
+    if (!container) return;
     container.innerHTML = '';
     
     if (!cards || !Array.isArray(cards) || cards.length === 0) {

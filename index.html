@@ -9,7 +9,7 @@
 <body>
     <!-- 1. Top info strip -->
     <div class="top-strip fade-up">
-        <span>DELECTURED v1.0 · WHISPER-LARGE-V3 · LLAMA-3.1-8B</span>
+        <span>DELECTURED v1.1 · WHISPER-LARGE-V3 · LLAMA-3.1-8B</span>
         <span id="api-status">API KEY: NOT SET</span>
     </div>
 
@@ -59,7 +59,7 @@
                     </tr>
                     <tr>
                         <td>Flat bullet points</td>
-                        <td>Visual concept confidence map</td>
+                        <td>Visual concept map visualization</td>
                     </tr>
                 </table>
 
@@ -100,7 +100,8 @@
                             <span class="upload-tag">M4A</span>
                             <span class="upload-tag">WAV</span>
                             <span class="upload-tag">MP4</span>
-                            <span class="upload-tag" style="border:none; background:transparent;">MAX 25MB</span>
+                            <span class="upload-tag">AAC</span>
+                            <span class="upload-tag" style="border:none; background:transparent;">MAX 1GB</span>
                         </div>
                     </div>
                 </div>
@@ -108,6 +109,12 @@
 
                 <!-- 6. Processing terminal -->
                 <div class="terminal" id="terminal">
+                    <div class="progress-container" id="progress-container" style="display:none; margin-bottom: 1.5rem;">
+                        <div class="progress-label" id="progress-label">INITIALIZING...</div>
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" id="progress-bar-fill"></div>
+                        </div>
+                    </div>
                     <div id="terminal-content"></div>
                 </div>
             </div>
@@ -117,7 +124,7 @@
                 <ul class="step-list">
                     <li class="step-item">
                         <h3>Whisper Transcription</h3>
-                        <p>Audio is processed using Groq's whisper-large-v3 API. We pre-process the transcript locally to remove filler words and assess quality before sending to the intelligence pipeline.</p>
+                        <p>Audio is processed using Groq's whisper-large-v3 API. We automatically chunk large lectures (up to 1GB) and optimize audio quality locally for high-fidelity transcription.</p>
                     </li>
                     <li class="step-item">
                         <h3>Stage 1: Fast Analysis</h3>
@@ -125,7 +132,7 @@
                     </li>
                     <li class="step-item">
                         <h3>Stage 2: Domain-Aware Structuring</h3>
-                        <p>Using Stage 1's blueprint, a second LLaMA 3.1 pass acts as a domain expert. It extracts concepts with confidence ratings, identifies exam signals, and generates active recall flashcards.</p>
+                        <p>Using Stage 1's blueprint, a second LLaMA 3.1 pass acts as a domain expert. It extracts concepts, generates a visual concept map via Mermaid.js, identifies exam signals, and creates flashcards.</p>
                     </li>
                 </ul>
             </div>
@@ -186,6 +193,12 @@
                 <div class="label">LECTURE DNA — CONCEPT DENSITY ACROSS TIMELINE</div>
                 <div class="dna-bars" id="dna-bars"></div>
             </div>
+        </div>
+
+        <div class="result-card" id="concept-map-container" style="display:none;">
+            <!-- Concept Map -->
+            <div class="label" style="margin-bottom: 2rem;">CONCEPT MAP VISUALIZATION</div>
+            <div id="concept-map" class="mermaid" style="display: flex; justify-content: center; background: white; padding: 2rem; border-radius: 4px;"></div>
         </div>
 
         <div class="result-card" id="exam-signals-container" style="display:none;">
@@ -260,6 +273,8 @@
         </div>
     </footer>
 
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'loose' });</script>
     <script src="app.js"></script>
 </body>
 </html>
