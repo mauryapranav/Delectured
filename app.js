@@ -5,7 +5,7 @@
 const MAX_SIZE = 25 * 1024 * 1024;
 const CHUNK_DURATION = 10 * 60; 
 const TARGET_SAMPLE_RATE = 16000;
-const CONCURRENCY_LIMIT = 3; 
+const CONCURRENCY_LIMIT = 2; // Lowered slightly for reliability
 const CHUNK_OVERLAP_S = 3; 
 
 const ALLOWED_TYPES = [
@@ -17,34 +17,26 @@ const ALLOWED_TYPES = [
 async function processAudioFile(file, logTerminal) {
   logTerminal("[PROCESS] Reading audio file...");
   updateProgress(5, "Decoding Audio...");
-  
   const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: TARGET_SAMPLE_RATE });
-  
   try {
     const arrayBuffer = await file.arrayBuffer();
     const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-    
     logTerminal(`[PROCESS] Audio decoded: ${audioBuffer.duration.toFixed(1)}s`);
-    
     const chunks = [];
     const overlapSamples = CHUNK_OVERLAP_S * TARGET_SAMPLE_RATE;
     const chunkSamples = CHUNK_DURATION * TARGET_SAMPLE_RATE;
     const totalSamples = audioBuffer.length;
-    
     for (let i = 0; i < totalSamples; i += (chunkSamples - overlapSamples)) {
       const end = Math.min(i + chunkSamples, totalSamples);
       const chunkBuffer = audioCtx.createBuffer(1, end - i, TARGET_SAMPLE_RATE);
       const chanData = chunkBuffer.getChannelData(0);
       for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
         const data = audioBuffer.getChannelData(channel).subarray(i, end);
-        for (let s = 0; s < data.length; s++) {
-          chanData[s] += data[s] / audioBuffer.numberOfChannels;
-        }
+        for (let s = 0; s < data.length; s++) { chanData[s] += data[s] / audioBuffer.numberOfChannels; }
       }
       chunks.push(chunkBuffer);
       if (end === totalSamples) break;
     }
-    
     logTerminal(`[PROCESS] Compressing ${chunks.length} segments to MP3...`);
     const blobs = [];
     for (let i = 0; i < chunks.length; i++) {
@@ -55,9 +47,7 @@ async function processAudioFile(file, logTerminal) {
   } catch (e) {
     console.error(e);
     throw new Error("Failed to process audio. Format unsupported or file corrupted.");
-  } finally {
-    audioCtx.close();
-  }
+  } finally { audioCtx.close(); }
 }
 
 function audioBufferToMp3Blob(buffer) {
@@ -181,8 +171,8 @@ async function handleFile(file) {
   els.terminalContent.innerHTML = '';
   document.getElementById('results').style.display = 'none';
   
-  updateProgress(5, "Initializing Pipeline...");
-  logTerminal("DeLectured v1.3.1 - Enhanced Expert Pipeline");
+  updateProgress(5, "Initializing...");
+  logTerminal("DeLectured v1.3.2 - Bulletproof Pipeline Engaged");
   
   try {
     const audioBlobs = await processAudioFile(file, logTerminal);
@@ -190,40 +180,35 @@ async function handleFile(file) {
     let completed = 0;
 
     // Part 1 - Speculative Analysis
-    updateProgress(20, "Transcribing Part 1 (Speculative)...");
+    updateProgress(20, "Transcribing Part 1...");
     const firstText = await transcribeAudio(audioBlobs[0]);
     results[0] = firstText;
     completed++;
     
-    logTerminal("[STAGE 1] Running instant domain & subject detection...");
-    const stage1Analysis = await analyzeTranscriptStage1(firstText);
+    logTerminal("[STAGE 1] Running speculative analysis...");
+    let stage1Analysis = await analyzeTranscriptStage1(firstText);
     
-    // LIVE UI UPDATE: Subject and Preliminary Summary
-    logTerminal(`[STAGE 1] Subject: ${stage1Analysis.subject}`);
+    // LIVE UI PREVIEW
     els.results.style.display = 'block';
     renderStage1Badges(stage1Analysis);
-    renderPullquote(`[PRELIMINARY SUMMARY]: ${stage1Analysis.preliminary_summary} (Full deep-structuring in progress...)`);
+    renderPullquote(`[PRELIMINARY ANALYSIS]: This lecture appears to be about ${stage1Analysis.subject || 'a technical topic'}. Full structuring is active...`);
     els.results.scrollIntoView({ behavior: 'smooth' });
 
-    // Technical Context for remaining chunks (Sanitized for Whisper API)
-    const technicalPrompt = `Lecture about ${stage1Analysis.subject} in ${stage1Analysis.domain}. Terms: ${stage1Analysis.emphasis_markers.slice(0, 5).join(", ")}`.replace(/[^a-zA-Z0-9, ]/g, '').substring(0, 200);
+    const technicalPrompt = `Lecture: ${stage1Analysis.subject}. Terms: ${stage1Analysis.emphasis_markers?.slice(0, 5).join(", ")}`.replace(/[^a-zA-Z0-9, ]/g, '').substring(0, 200);
 
-    // Parallel processing for remaining chunks
+    // Parallel remaining chunks
     if (audioBlobs.length > 1) {
-      logTerminal(`[WHISPER] Processing remaining ${audioBlobs.length-1} parts in parallel...`);
+      logTerminal(`[WHISPER] Processing remaining ${audioBlobs.length-1} segments...`);
       const remainingIdx = Array.from({length: audioBlobs.length - 1}, (_, i) => i + 1);
-      
       for (let i = 0; i < remainingIdx.length; i += CONCURRENCY_LIMIT) {
         const batch = remainingIdx.slice(i, i + CONCURRENCY_LIMIT).map(async (idx) => {
           try {
-            const text = await transcribeAudio(audioBlobs[idx], technicalPrompt);
-            results[idx] = text;
+            results[idx] = await transcribeAudio(audioBlobs[idx], technicalPrompt);
             completed++;
             updateProgress(20 + (completed/audioBlobs.length)*50, `Transcribing ${completed}/${audioBlobs.length}...`);
           } catch (e) {
-            logTerminal(`[RETRY] Error in Part ${idx+1}. Retrying...`);
-            const text = await transcribeAudio(audioBlobs[idx], technicalPrompt);
-            results[idx] = text;
+            logTerminal(`[RETRY] Part ${idx+1} retrying...`);
+            results[idx] = await transcribeAudio(audioBlobs[idx], technicalPrompt);
             completed++;
           }
         });
@@ -231,22 +216,19 @@ async function handleFile(file) {
       }
     }
 
-    updateProgress(80, "Expert Intelligence (70B Model)...");
+    updateProgress(80, "Structuring Depth (70B)...");
     const fullTranscript = results.join(" ");
     currentTranscript = fullTranscript;
     document.getElementById('raw-text').textContent = fullTranscript;
     
-    logTerminal("[STAGE 2] Generating exhaustive study guide...");
     const signals = findExamSignals(fullTranscript);
     const notesJson = await generateNotesStage2(fullTranscript, stage1Analysis, signals);
     currentNotes = notesJson;
     
     updateProgress(100, "Complete");
-    logTerminal("[PROCESS] Finalizing visual renders...");
-    
     renderScore(notesJson.score);
-    renderPullquote(notesJson.notes.summary);
-    renderDNA(notesJson.lecture_dna);
+    renderPullquote(notesJson.notes?.summary || "Summary generation failed.");
+    renderDNA(notesJson.lecture_dna || Array(20).fill(5));
     if(signals.length > 0 || (notesJson.exam_signals && notesJson.exam_signals.length > 0)) {
         renderExamSignals(notesJson.exam_signals || []);
     }
@@ -263,8 +245,8 @@ async function handleFile(file) {
   } catch (error) {
     logTerminal(`[FATAL ERROR] ${error.message}`);
     const retryBtn = document.createElement('button');
-    retryBtn.className = 'btn'; retryBtn.textContent = 'BACK TO UPLOAD';
-    retryBtn.onclick = () => { els.terminal.style.display = 'none'; els.uploadZone.style.display = 'flex'; };
+    retryBtn.className = 'btn'; retryBtn.textContent = 'RETRY';
+    retryBtn.onclick = () => location.reload();
     els.terminalContent.appendChild(retryBtn);
   }
 }
@@ -275,66 +257,62 @@ async function transcribeAudio(blob, prompt = "") {
   formData.append('model', 'whisper-large-v3-turbo');
   if(prompt) formData.append('initial_prompt', prompt);
   if(selectedLanguage !== 'auto') formData.append('language', selectedLanguage);
-
   const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${apiKey}` },
     body: formData
   });
-  if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error?.message || `Whisper Error ${res.status}`);
-  }
+  if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(`Whisper Error: ${err.error?.message || res.status}`); }
   const data = await res.json();
   return data.text;
 }
 
 async function analyzeTranscriptStage1(text) {
-    const prompt = `Analyze this 10-minute lecture segment. Return strictly valid JSON:
+    try {
+        const prompt = `Analyze this 10-minute segment. Return ONLY valid JSON:
 {
-  "domain": "Academic Domain", 
-  "subject": "Main Topic Name",
-  "preliminary_summary": "3-4 sentence summary of these first 10 minutes",
-  "structure": { "intro_pct": 25, "core_pct": 75, "examples_pct": 0, "conclusion_pct": 0 },
-  "emphasis_markers": ["technical term 1", "key concept"],
-  "language": { "detected": "English", "hindi_pct": 0, "english_pct": 100 }
+  "domain": "Domain Name", 
+  "subject": "Topic Name",
+  "structure": { "intro_pct": 20, "core_pct": 80 },
+  "emphasis_markers": ["term 1"],
+  "language": { "detected": "English" }
 }
 Transcript: ${text.substring(0, 4000)}`;
 
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            model: "llama-3.1-8b-instant",
-            messages: [{ role: "user", content: prompt }],
-            response_format: { type: "json_object" }
-        })
-    });
-    const data = await res.json();
-    return JSON.parse(data.choices[0].message.content);
+        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: "llama-3.1-8b-instant",
+                messages: [{ role: "user", content: prompt }],
+                response_format: { type: "json_object" }
+            })
+        });
+        const data = await res.json();
+        return JSON.parse(data.choices[0].message.content);
+    } catch (e) {
+        return { domain: "General", subject: "Lecture", emphasis_markers: [], language: {detected: "English"} };
+    }
 }
 
 async function generateNotesStage2(transcript, analysis, signals) {
     const wordCount = transcript.split(' ').length;
     const conceptScale = Math.min(20, Math.max(8, Math.floor(wordCount / 650)));
-    const prompt = `You are a Subject Matter Expert in ${analysis.domain}. Structure this ${wordCount}-word lecture into exhaustive study notes.
-    LECTURE: ${analysis.subject}.
-    REQUIREMENTS:
-    1. Summary: Long-form deep insight (300-500 words).
-    2. Concepts: Extract exactly ${conceptScale} concepts with detailed technical explanations.
-    3. Mermaid Map: Comprehensive Mindmap.
-    Return ONLY valid JSON:
+    const prompt = `You are a world-class educational structuring engine. 
+    Domain: ${analysis.domain || 'Academic'}. Subject: ${analysis.subject || 'Technical Lecture'}.
+    
+    Return STRICTLY valid JSON:
     {
       "notes": {
-        "summary": "...",
+        "summary": "Deep long-form insight (250-400 words)",
         "structure_summary": { "intro": "...", "core": "...", "examples": "...", "conclusion": "..." },
         "topics": [],
-        "concepts": [{ "term": "...", "explanation": "...", "confidence": 1-3 }],
+        "concepts": [{ "term": "...", "explanation": "detailed definition", "confidence": 1-3 }],
         "important": [],
         "questions": []
       },
-      "concept_map": "mindmap...",
-      "score": { "clarity": 85, "clarity_label": "High", "density": 95, "density_label": "Maximum", "pace": 70, "pace_label": "Steady", "concept_count": ${conceptScale}, "revision_mins": 45 },
+      "concept_map": "mermaid mindmap/graph TD code",
+      "score": { "clarity": 80, "density": 90, "pace": 70, "concept_count": ${conceptScale}, "revision_mins": 45 },
       "flashcards": [{ "q": "...", "a": "..." }],
       "exam_signals": [{ "quote": "...", "topic": "..." }],
       "lecture_dna": [20 integers]
@@ -351,6 +329,7 @@ async function generateNotesStage2(transcript, analysis, signals) {
             response_format: { type: "json_object" }
         })
     });
+    if (!res.ok) throw new Error("Stage 2 (70B) Structuring failed.");
     const data = await res.json();
     return JSON.parse(data.choices[0].message.content);
 }
@@ -398,9 +377,7 @@ function logTerminal(msg) {
   els.terminal.scrollTop = els.terminal.scrollHeight;
 }
 
-function cleanTranscript(text) {
-  return text.replace(/\b(um|uh|you know|basically)\b/gi, '').replace(/\s+/g, ' ').trim();
-}
+function cleanTranscript(text) { return text.replace(/\b(um|uh|you know|basically)\b/gi, '').replace(/\s+/g, ' ').trim(); }
 
 function findExamSignals(text) {
   let found = [];
@@ -418,19 +395,21 @@ function findExamSignals(text) {
 function renderStage1Badges(analysis) {
     const container = document.getElementById('badges-container');
     if (!container) return;
-    container.innerHTML = `<span class="badge badge-domain">◆ ${analysis.domain.toUpperCase()} / ${analysis.subject.toUpperCase()}</span>`;
+    const dom = (analysis?.domain || "General").toString().toUpperCase();
+    const sub = (analysis?.subject || "Lecture").toString().toUpperCase();
+    container.innerHTML = `<span class="badge badge-domain">◆ ${dom} / ${sub}</span>`;
 }
 
 function renderScore(score) {
     const ids = ['score-clarity', 'score-density', 'score-pace', 'score-concepts', 'score-revision'];
     ids.forEach(id => {
         const el = document.getElementById(id);
-        if (!el) return;
-        if (id === 'score-clarity') el.textContent = score.clarity;
-        if (id === 'score-density') el.textContent = score.density;
-        if (id === 'score-pace') el.textContent = score.pace;
-        if (id === 'score-concepts') el.textContent = score.concept_count;
-        if (id === 'score-revision') el.textContent = score.revision_mins;
+        if (!el || !score) return;
+        if (id === 'score-clarity') el.textContent = score.clarity || "--";
+        if (id === 'score-density') el.textContent = score.density || "--";
+        if (id === 'score-pace') el.textContent = score.pace || "--";
+        if (id === 'score-concepts') el.textContent = score.concept_count || "--";
+        if (id === 'score-revision') el.textContent = score.revision_mins || "--";
     });
 }
 
@@ -438,7 +417,7 @@ function renderPullquote(text) { const el = document.getElementById('summary-quo
 
 function renderDNA(dnaArray) {
     const container = document.getElementById('dna-bars');
-    if (!container) return;
+    if (!container || !dnaArray) return;
     container.innerHTML = '';
     dnaArray.forEach((val, i) => {
         const bar = document.createElement('div');
@@ -453,34 +432,34 @@ function renderDNA(dnaArray) {
 function renderExamSignals(signals) {
     const container = document.getElementById('exam-signals-container');
     if(!container) return;
+    if(!signals || signals.length === 0) { container.style.display = 'none'; return; }
     container.style.display = 'block';
     const list = document.getElementById('exam-signals-list');
-    if (list) {
-        list.innerHTML = '';
-        signals.forEach(sig => {
-            const div = document.createElement('div');
-            div.className = 'exam-signal-item';
-            div.innerHTML = `"${sig.quote}" <span style="color:var(--text-tertiary); margin-left:10px;">// ${sig.topic}</span>`;
-            list.appendChild(div);
-        });
-    }
+    if (!list) return;
+    list.innerHTML = '';
+    signals.forEach(sig => {
+        const div = document.createElement('div');
+        div.className = 'exam-signal-item';
+        div.innerHTML = `"${sig?.quote || ''}" <span style="color:var(--text-tertiary); margin-left:10px;">// ${sig?.topic || ''}</span>`;
+        list.appendChild(div);
+    });
 }
 
 function renderNotesGrid(notes) {
     const topicsCol = document.getElementById('col-topics');
     const conceptsCol = document.getElementById('col-concepts');
-    if (topicsCol) {
+    if (topicsCol && notes?.topics) {
         let html = '';
         notes.topics.forEach(t => html += `<div class="notes-item"><strong>→ ${t}</strong></div>`);
         html += `<div class="notes-col-header" style="margin-top:2rem">Key Takeaways</div>`;
-        notes.important.forEach(i => html += `<div class="notes-item">${i}</div>`);
+        if(notes.important) notes.important.forEach(i => html += `<div class="notes-item">${i}</div>`);
         topicsCol.innerHTML = html;
     }
-    if (conceptsCol) {
+    if (conceptsCol && notes?.concepts) {
         let cHtml = '';
         notes.concepts.forEach(c => {
-            const dots = Array(3).fill(0).map((_, i) => `<span class="dot ${i < c.confidence ? 'filled' : ''}"></span>`).join('');
-            cHtml += `<div class="notes-item"><div class="concept-header"><span class="concept-term">${c.term}</span><span class="confidence-dots">${dots}</span></div><div style="font-size:13px; color:var(--text-secondary)">${c.explanation}</div></div>`;
+            const dots = Array(3).fill(0).map((_, i) => `<span class="dot ${i < (c.confidence || 1) ? 'filled' : ''}"></span>`).join('');
+            cHtml += `<div class="notes-item"><div class="concept-header"><span class="concept-term">${c.term || ''}</span><span class="confidence-dots">${dots}</span></div><div style="font-size:13px; color:var(--text-secondary)">${c.explanation || ''}</div></div>`;
         });
         conceptsCol.innerHTML = cHtml;
     }
@@ -489,7 +468,7 @@ function renderNotesGrid(notes) {
 function renderConceptMap(mermaidCode) {
     const container = document.getElementById('concept-map-container');
     const target = document.getElementById('concept-map');
-    if (!container || !target) return;
+    if (!container || !target || !mermaidCode) return;
     container.style.display = 'block';
     target.innerHTML = mermaidCode;
     target.removeAttribute('data-processed');
@@ -498,13 +477,13 @@ function renderConceptMap(mermaidCode) {
 
 function renderFlashcards(cards) {
     const container = document.getElementById('flashcards-grid');
-    if (!container) return;
+    if (!container || !cards) return;
     container.innerHTML = '';
     cards.forEach((card, i) => {
         const div = document.createElement('div');
         div.className = 'flashcard';
         div.style.setProperty('--tilt', i % 2 === 0 ? '0.4deg' : '-0.4deg');
-        div.innerHTML = `<div class="flashcard-inner"><div class="flashcard-front"><div class="fc-q-prefix">Q:</div><div class="fc-text">${card.q}</div><div class="fc-flip-hint">click to flip →</div></div><div class="flashcard-back"><div class="fc-a-prefix">A:</div><div class="fc-text">${card.a}</div></div></div>`;
+        div.innerHTML = `<div class="flashcard-inner"><div class="flashcard-front"><div class="fc-q-prefix">Q:</div><div class="fc-text">${card?.q || ''}</div><div class="fc-flip-hint">click to flip →</div></div><div class="flashcard-back"><div class="fc-a-prefix">A:</div><div class="fc-text">${card?.a || ''}</div></div></div>`;
         div.addEventListener('click', () => div.classList.toggle('flipped'));
         container.appendChild(div);
     });
@@ -512,8 +491,8 @@ function renderFlashcards(cards) {
 
 function downloadNotes() {
     if(!currentNotes) return;
-    let text = `DELECTURED NOTES\n=================\n\nSUMMARY\n${currentNotes.notes.summary}\n\nCONCEPTS\n`;
-    currentNotes.notes.concepts.forEach(c => text += `- ${c.term}: ${c.explanation}\n`);
+    let text = `DELECTURED NOTES\n=================\n\nSUMMARY\n${currentNotes.notes?.summary || ''}\n\nCONCEPTS\n`;
+    currentNotes.notes?.concepts?.forEach(c => text += `- ${c.term}: ${c.explanation}\n`);
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'notes.txt'; a.click();
