@@ -1,5 +1,5 @@
 // ==========================================
-// DeLectured v1.6 - Expert Finality
+// DeLectured - Core Logic & Expert Engine
 // ==========================================
 
 const MAX_SIZE = 25 * 1024 * 1024;
@@ -87,7 +87,6 @@ const els = {
   terminalContent: document.getElementById('terminal-content'),
   results: document.getElementById('results'),
   langChips: document.querySelectorAll('.lang-chip'),
-  refreshFlashcards: document.getElementById('btn-refresh-flashcards'),
   processAnother: document.getElementById('btn-process-another'),
   downloadBtn: document.getElementById('btn-download')
 };
@@ -125,21 +124,9 @@ function init() {
   els.uploadZone.addEventListener('click', () => els.fileInput.click());
   els.fileInput.addEventListener('change', (e) => { if (e.target.files.length) handleFile(e.target.files[0]); });
   
-  if (els.refreshFlashcards) {
-    els.refreshFlashcards.addEventListener('click', async () => {
-        if (!currentTranscript) return;
-        els.refreshFlashcards.textContent = "↻ GENERATING...";
-        els.refreshFlashcards.disabled = true;
-        const newCards = await refreshFlashcards(currentTranscript);
-        renderFlashcards(newCards);
-        els.refreshFlashcards.textContent = "↻ REFRESH";
-        els.refreshFlashcards.disabled = false;
-    });
-  }
-
   if (els.processAnother) {
     els.processAnother.addEventListener('click', () => {
-        if (confirm("Wait! Have you saved your notes? Starting a new lecture will clear current results.")) {
+        if (confirm("Wait! Have you saved your notes? Resetting will clear the current results.")) {
             location.reload();
         }
     });
@@ -185,8 +172,8 @@ async function handleFile(file) {
   els.terminalContent.innerHTML = '';
   document.getElementById('results').style.display = 'none';
   
-  updateProgress(5, "Starting...");
-  logTerminal("DeLectured v1.6 - Unified Expert Engine");
+  updateProgress(5, "Initializing...");
+  logTerminal("DeLectured Core Engine Engaged");
   
   try {
     const audioBlobs = await processAudioFile(file);
@@ -216,7 +203,7 @@ async function handleFile(file) {
     const analysis = await analyzeTranscriptStage1(fullTranscript);
     
     updateProgress(85, "Intelligence...");
-    logTerminal("[4/5] GENERATING HIGH-DENSITY STUDY GUIDE (70B)");
+    logTerminal("[4/5] GENERATING STUDY GUIDE (70B)");
     const notesJson = await generateNotesStage2(fullTranscript, analysis);
     currentNotes = notesJson;
     
@@ -235,7 +222,7 @@ async function handleFile(file) {
     if(notesJson.concept_map) renderConceptMap(notesJson.concept_map);
 
     document.querySelectorAll('.results > *').forEach((el, i) => {
-        el.style.opacity = '0'; el.style.animation = `fadeUp 0.5s ${i * 0.1} forwards`;
+        el.style.opacity = '0'; el.style.animation = `fadeUp 0.5s ${i * 0.1}s forwards`;
     });
     updateProgress(100, "Done");
   } catch (error) {
@@ -281,15 +268,15 @@ async function generateNotesStage2(transcript, analysis) {
     const prompt = `You are a Subject Matter Expert in ${analysis.domain}.
     TASK: Transform this ${wordCount}-word transcript into an EXHAUSTIVE, high-density study guide.
     STRICT REQUIREMENTS:
-    1. SUMMARY: Provide a deep, 500+ word technical insight explaining the core thesis.
-    2. CONCEPTS: Extract at least 20 technical concepts with detailed academic definitions.
+    1. SUMMARY: Provide a deep technical insight explaining the core thesis (at least 500 words).
+    2. CONCEPTS: Extract at least 20 technical concepts with deep academic definitions.
     3. CONCEPT MAP: Return complex Mermaid.js graph TD code.
     Return ONLY valid JSON:
     {
       "notes": {
         "summary": "Full detailed analysis (500+ words)...",
         "topics": [],
-        "concepts": [{ "term": "...", "explanation": "Deep definition...", "confidence": 1-3 }],
+        "concepts": [{ "term": "...", "explanation": "Deep technical definition...", "confidence": 1-3 }],
         "important": [],
         "structure_summary": { "intro": "...", "core": "...", "examples": "...", "conclusion": "..." }
       },
@@ -306,20 +293,6 @@ async function generateNotesStage2(transcript, analysis) {
     });
     const data = await res.json();
     return JSON.parse(data.choices[0].message.content);
-}
-
-async function refreshFlashcards(transcript) {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            model: "llama-3.1-8b-instant",
-            messages: [{ role: "user", content: `Generate 6 recall flashcards. JSON: {"flashcards": [{"q": "...", "a": "..."}]}. Transcript: ${transcript.substring(0, 15000)}` }],
-            response_format: { type: "json_object" }
-        })
-    });
-    const data = await res.json();
-    return JSON.parse(data.choices[0].message.content).flashcards;
 }
 
 async function handleChat(msg) {
@@ -439,20 +412,14 @@ function renderFlashcards(cards) {
 
 function downloadFullReport() {
     if(!currentNotes || !currentTranscript) return;
-    let text = `DELECTURED v1.6 - FULL LECTURE REPORT\n`;
-    text += `=========================================\n\n`;
+    let text = `DELECTURED FULL REPORT\n========================\n\n`;
     text += `SUMMARY:\n${currentNotes.notes?.summary || ''}\n\n`;
-    text += `INTELLIGENCE SCORES:\n`;
-    text += `- Clarity: ${currentNotes.score?.clarity}/100\n`;
-    text += `- Density: ${currentNotes.score?.density}/100\n\n`;
-    text += `TECHNICAL CONCEPTS:\n`;
+    text += `CONCEPTS:\n`;
     currentNotes.notes?.concepts?.forEach(c => { text += `- ${c.term}: ${c.explanation}\n`; });
-    text += `\nFULL TRANSCRIPTION:\n`;
-    text += `-----------------------------------------\n`;
-    text += currentTranscript;
+    text += `\nFULL TRANSCRIPTION:\n${currentTranscript}`;
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = 'DeLectured_Report.txt'; a.click();
+    const a = document.createElement('a'); a.href = url; a.download = 'Report.txt'; a.click();
 }
 
 document.addEventListener('DOMContentLoaded', init);
