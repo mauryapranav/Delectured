@@ -43,7 +43,7 @@
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
 html { scroll-behavior: smooth; scroll-padding-top: 80px; }
-body { background-color: var(--paper); color: var(--text-primary); font-family: var(--font-sans); font-size: 15px; line-height: 1.7; transition: background-color 0.25s, color 0.25s; overflow-x: hidden; position: relative; }
+body { background-color: var(--paper); color: var(--text-primary); font-family: var(--font-sans); font-size: 15px; line-height: 1.7; overflow-x: hidden; position: relative; }
 
 .result-card { background: var(--paper-2); border: 1px solid var(--border); padding: 2.5rem; margin-bottom: 2rem; border-radius: 4px; }
 
@@ -200,29 +200,13 @@ nav { display: flex; justify-content: space-between; align-items: center; paddin
 .chat-input-wrapper { display: flex; align-items: center; border-bottom: 1px solid var(--border-strong); padding: 0.5rem 0; }
 .chat-input { flex-grow: 1; background: transparent; border: none; font-family: var(--font-sans); font-size: 15px; color: var(--text-primary); outline: none; padding: 0.5rem; }
 
-/* Organic Theme Transition (View Transitions API) */
-html.theme-transitioning::view-transition-old(root),
-html.theme-transitioning::view-transition-new(root) {
-  animation: none;
-  mix-blend-mode: normal;
+/* Universal Theme Transition */
+.theme-transition,
+.theme-transition *,
+.theme-transition *:before,
+.theme-transition *:after {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, fill 0.3s ease !important;
 }
-
-html.theme-transitioning::view-transition-old(root) {
-  z-index: 2;
-  mask: url(#ink-mask);
-  -webkit-mask: url(#ink-mask);
-}
-
-html.theme-transitioning::view-transition-new(root) {
-  z-index: 1;
-}
-
-:root {
-  --ink-ease: cubic-bezier(0.7, 0, 0.3, 1);
-  --dissolve-ease: cubic-bezier(0.15, 0.85, 0.35, 1);
-  /* ... existing vars ... */
-}
-
 
 /* Transcript */
 .transcript-section { margin: 4rem 0; border-top: 1px solid var(--border); padding-top: 2rem; }
