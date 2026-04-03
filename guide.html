@@ -1,16 +1,30 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Guide & Documentation | DeLectured</title>
     <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
+    <!-- Floating ink particles (decorative, guide-only) -->
+    <div class="guide-ink-particles" aria-hidden="true">
+        <div class="guide-ink-blot" style="--delay:0s; --x:8%; --y:15%; --size:6px; --drift:60px; --dur:14s;"></div>
+        <div class="guide-ink-blot" style="--delay:2s; --x:92%; --y:25%; --size:4px; --drift:45px; --dur:11s;"></div>
+        <div class="guide-ink-blot" style="--delay:4s; --x:15%; --y:55%; --size:8px; --drift:50px; --dur:16s;"></div>
+        <div class="guide-ink-blot" style="--delay:1s; --x:85%; --y:70%; --size:5px; --drift:55px; --dur:13s;"></div>
+        <div class="guide-ink-blot" style="--delay:3s; --x:50%; --y:40%; --size:3px; --drift:40px; --dur:10s;"></div>
+        <div class="guide-ink-blot" style="--delay:5s; --x:30%; --y:80%; --size:7px; --drift:65px; --dur:18s;"></div>
+        <div class="guide-ink-blot" style="--delay:6s; --x:70%; --y:10%; --size:4px; --drift:35px; --dur:12s;"></div>
+        <div class="guide-ink-blot" style="--delay:7s; --x:45%; --y:90%; --size:5px; --drift:50px; --dur:15s;"></div>
+    </div>
+
     <!-- Top info strip -->
     <div class="top-strip">
-        <span>DELECTURED v1.0 · DOCUMENTATION</span>
-        <span style="color:var(--text-tertiary);">CLIENT-SIDE AI ARCHITECTURE</span>
+        <span>DELECTURED v1.6.7 · DOCUMENTATION</span>
+        <span style="color:var(--text-tertiary);">WHISPER-TURBO · LLAMA-3.3-70B</span>
     </div>
 
     <!-- Nav -->
@@ -28,35 +42,47 @@
 
     <div class="container" style="padding-top: 4rem; padding-bottom: 4rem;">
         <h1>Documentation.</h1>
-        <p class="tagline" style="margin-bottom: 4rem;">Everything you need to know about how DeLectured processes, understands, and structures your audio.</p>
+        <p class="tagline" style="margin-bottom: 4rem;">Everything you need to know about how DeLectured processes,
+            understands, and structures your audio into exhaustive study materials.</p>
 
         <!-- Getting Started -->
         <section class="guide-section">
             <h2>Getting Started</h2>
             <ul class="step-list">
-                <li class="step-item">
+                <li class="step-item guide-hover-lift">
                     <h3>Get a Groq API Key</h3>
-                    <p>DeLectured runs entirely in your browser using the Groq API for blazing fast inference. Get a free API key at <a href="https://console.groq.com/keys" target="_blank">console.groq.com</a>.</p>
+                    <p>DeLectured runs entirely in your browser using the Groq API for blazing fast inference. Get a
+                        free API key at <a href="https://console.groq.com/keys" target="_blank">console.groq.com</a>.
+                    </p>
                 </li>
-                <li class="step-item">
-                    <h3>Prepare your audio</h3>
-                    <p>Record your lecture. M4A (voice memo), MP3, and WAV files up to 25MB are supported. If your file is larger, use a free compressor tool online.</p>
+                <li class="step-item guide-hover-lift">
+                    <h3>Prepare Your Audio</h3>
+                    <p>Record your lecture. We support files <strong>up to 1GB</strong> — the engine resamples and
+                        compresses client-side using lamejs @ 64kbps before uploading. Supported formats: <strong>MP3,
+                            M4A, WAV, MP4, AAC, OGG, FLAC, WebM, AMR</strong>.</p>
                 </li>
-                <li class="step-item">
+                <li class="step-item guide-hover-lift">
                     <h3>Select Language</h3>
-                    <p>DeLectured natively supports mixed-language processing. If your professor mixes Hindi and English (Hinglish), select the "Hindi / Hinglish" option for specialized notes.</p>
+                    <p>DeLectured natively supports mixed-language processing. If your professor mixes Hindi and English
+                        (Hinglish), select the "Hindi / Hinglish" option. There's also an "Auto-detect" mode for other
+                        languages.</p>
                 </li>
-                <li class="step-item">
+                <li class="step-item guide-hover-lift">
                     <h3>Upload & Wait</h3>
-                    <p>Processing typically takes 15-45 seconds depending on lecture length, handled directly via API calls from your browser.</p>
+                    <p>Processing typically takes 1–4 minutes depending on lecture length. The audio is split into
+                        10-minute segments and transcribed in parallel (2 concurrent streams) for maximum speed.</p>
                 </li>
             </ul>
         </section>
 
         <!-- Privacy -->
         <div class="privacy-box">
-            <h3 style="color: var(--accent); font-family: var(--font-mono); font-size: 14px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem;">Privacy Architecture</h3>
-            <p><strong>Your audio never touches our servers.</strong> DeLectured is a static web application. When you upload a file, it is sent directly from your browser to Groq's secure API endpoints. We have no databases, no user accounts, and no access to your API key or data.</p>
+            <h3
+                style="color: var(--accent); font-family: var(--font-mono); font-size: 14px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem;">
+                Privacy Architecture</h3>
+            <p><strong>Your audio never touches our servers.</strong> DeLectured is a static web application. When you
+                upload a file, it is compressed in your browser and sent directly to Groq's secure API endpoints. We
+                have no databases, no user accounts, and no access to your API key or data.</p>
         </div>
 
         <!-- Limits -->
@@ -70,66 +96,191 @@
                 </tr>
                 <tr>
                     <td class="mono-data">File Size</td>
-                    <td class="mono-data">25 MB</td>
-                    <td>Groq Whisper API hard limit</td>
+                    <td class="mono-data">1 GB</td>
+                    <td>Client-side resampling + MP3 compression to fit API limits</td>
                 </tr>
                 <tr>
                     <td class="mono-data">Formats</td>
-                    <td class="mono-data">MP3, M4A, WAV, MP4</td>
-                    <td>Native browser parsing supported</td>
+                    <td class="mono-data">MP3, M4A, WAV, MP4, AAC, OGG, FLAC, WebM, AMR</td>
+                    <td>Any format your browser can decode</td>
+                </tr>
+                <tr>
+                    <td class="mono-data">Concurrency</td>
+                    <td class="mono-data">2 parallel streams</td>
+                    <td>Segments transcribed simultaneously for speed</td>
+                </tr>
+                <tr>
+                    <td class="mono-data">Compression</td>
+                    <td class="mono-data">64 kbps MP3</td>
+                    <td>lamejs encoding, mono 16kHz — optimized for speech</td>
                 </tr>
                 <tr>
                     <td class="mono-data">API Cost</td>
                     <td class="mono-data">$0.00</td>
-                    <td>Currently free via Groq Beta limits</td>
+                    <td>Free via Groq's generous free tier</td>
                 </tr>
             </table>
         </section>
 
-        <!-- Features Deep Dive -->
+        <!-- Expert Pipeline -->
+        <section class="guide-section">
+            <h2>The Expert Pipeline</h2>
+
+            <div class="guide-pipeline">
+                <div class="guide-pipeline-step guide-hover-lift">
+                    <div class="guide-pipeline-num">01</div>
+                    <div>
+                        <h3>Audio Processing</h3>
+                        <p>Your file is decoded in-browser using the Web Audio API, resampled to 16kHz mono, and split
+                            into 10-minute segments with 3-second overlaps. Each segment is then async-compressed to MP3
+                            using lamejs — yielding to the UI thread to prevent freezing.</p>
+                    </div>
+                </div>
+                <div class="guide-pipeline-connector" aria-hidden="true">
+                    <div class="guide-pipeline-dot"></div>
+                    <div class="guide-pipeline-dot"></div>
+                    <div class="guide-pipeline-dot"></div>
+                </div>
+                <div class="guide-pipeline-step guide-hover-lift">
+                    <div class="guide-pipeline-num">02</div>
+                    <div>
+                        <h3>Parallel Whisper-Turbo Transcription</h3>
+                        <p>Segments are sent to <code>whisper-large-v3-turbo</code> via the Groq API, 2 at a time, with
+                            automatic retry logic (3 attempts per segment). This enables massive files to be processed
+                            in minutes rather than hours.</p>
+                    </div>
+                </div>
+                <div class="guide-pipeline-connector" aria-hidden="true">
+                    <div class="guide-pipeline-dot"></div>
+                    <div class="guide-pipeline-dot"></div>
+                    <div class="guide-pipeline-dot"></div>
+                </div>
+                <div class="guide-pipeline-step guide-hover-lift">
+                    <div class="guide-pipeline-num">03</div>
+                    <div>
+                        <h3>Stage 1 — Domain Analysis (8B)</h3>
+                        <p>A fast inference call using <code>llama-3.1-8b-instant</code> reads the first 5,000
+                            characters to auto-detect the academic domain (e.g., Biology, Economics, CS) and subject
+                            area. This metadata shapes everything that follows.</p>
+                    </div>
+                </div>
+                <div class="guide-pipeline-connector" aria-hidden="true">
+                    <div class="guide-pipeline-dot"></div>
+                    <div class="guide-pipeline-dot"></div>
+                    <div class="guide-pipeline-dot"></div>
+                </div>
+                <div class="guide-pipeline-step guide-hover-lift">
+                    <div class="guide-pipeline-num">04</div>
+                    <div>
+                        <h3>Stage 2 — Expert Structuring (70B)</h3>
+                        <p>The full transcript is sent to <code>llama-3.3-70b-versatile</code> acting as a Subject
+                            Matter Expert in the detected domain. It generates: a 500+ word technical summary, 20+
+                            concepts with deep definitions, an interactive concept graph, lecture DNA heatmap,
+                            intelligence scores, and active recall flashcards — all in a single pass.</p>
+                    </div>
+                </div>
+                <div class="guide-pipeline-connector" aria-hidden="true">
+                    <div class="guide-pipeline-dot"></div>
+                    <div class="guide-pipeline-dot"></div>
+                    <div class="guide-pipeline-dot"></div>
+                </div>
+                <div class="guide-pipeline-step guide-hover-lift">
+                    <div class="guide-pipeline-num">05</div>
+                    <div>
+                        <h3>Defensive Rendering</h3>
+                        <p>Every visual component (scores, summary, DNA heatmap, concept map, flashcards) is rendered
+                            inside its own try-catch block. If one component fails, the rest still render perfectly —
+                            the "Big Reveal" never crashes.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Feature Deep Dives -->
         <section class="guide-section">
             <h2>Feature Deep-Dives</h2>
-            
-            <h3 style="margin-top:2rem;">The Two-Stage Pipeline</h3>
-            <p>Unlike standard AI tools that simply run "summarize this text" over a transcript, DeLectured operates like a human note-taker analyzing a room.</p>
-            <p><strong>Stage 1 (Analysis):</strong> A fast, cheap inference call (~300 tokens) reads the raw transcript to identify the domain (e.g., Biology, Economics), structure (Intro, Core, Examples), and explicit emphasis markers ("this is very important").</p>
-            <p><strong>Stage 2 (Structuring):</strong> A second, specialized inference call uses Stage 1's blueprint to extract concepts dynamically, knowing exactly what the professor emphasized.</p>
 
             <h3 style="margin-top:2rem;">Concept Confidence</h3>
-            <p>Not all topics are covered equally. DeLectured plots a visual confidence map: ●●● means a concept was deeply explained, ●○○ means it was only briefly mentioned. This tells you exactly what you need to look up in the textbook.</p>
+            <p>Not all topics are covered equally. DeLectured extracts each concept with a confidence rating (1–3). This
+                tells you exactly what was deeply explained vs. briefly mentioned — so you know what to look up in the
+                textbook.</p>
 
-            <h3 style="margin-top:2rem;">Exam Signals</h3>
-            <p>A hybrid regex + AI system scans the transcript for explicit and implicit exam hints ("remember this for finals", "यह exam में आएगा"). These are pulled to the very top of your notes.</p>
+            <h3 style="margin-top:2rem;">Interactive Concept Map</h3>
+            <p>A live, animated canvas visualization connects extracted concepts with labeled relationships. Nodes drift
+                with subtle physics, pulse gently, and are rendered using the Paper & Ink palette. This gives you a
+                bird's-eye view of how concepts relate to each other.</p>
+
+            <h3 style="margin-top:2rem;">Lecture DNA Heatmap</h3>
+            <p>A visual density heatmap across 20 segments of the lecture. Tall bars = high-density content. Short bars
+                = lighter sections. At a glance, you see exactly where the professor front-loaded theory vs. wound down
+                with examples.</p>
+
+            <h3 style="margin-top:2rem;">Active Recall Flashcards</h3>
+            <p>Auto-generated question/answer cards from the lecture content. Click to flip. Designed for active recall
+                study sessions — the most effective memorization technique backed by cognitive science.</p>
+
+            <h3 style="margin-top:2rem;">Annotations & Q&A</h3>
+            <p>After processing, you can ask follow-up questions directly in the annotations panel. DeLectured uses
+                <code>llama-3.1-8b-instant</code> with streaming responses, grounded in your lecture notes, to give
+                instant academic insights — like a TA that actually read the material.
+            </p>
+
+            <h3 style="margin-top:2rem;">Intelligence Scores</h3>
+            <p>Five metrics scored by the 70B model: <strong>Clarity</strong> (how well-explained), <strong>Content
+                    Density</strong> (information per minute), <strong>Pace</strong> (speaking speed appropriateness),
+                <strong>Concept Count</strong> (total concepts found), and <strong>Revision Time</strong> (estimated
+                study minutes).
+            </p>
         </section>
 
         <!-- Comparison -->
         <section class="guide-section">
-            <h2>Why not ChatGPT or Otter.ai?</h2>
+            <h2>Why not ChatGPT or Other AI?</h2>
             <table class="comparison-table">
                 <tr>
                     <th>Feature</th>
-                    <th>Otter / Generic AI</th>
-                    <th>DeLectured</th>
+                    <th>Other AI Tools</th>
+                    <th>DeLectured v1.6.7</th>
                 </tr>
                 <tr>
                     <td>Domain Awareness</td>
                     <td>None. Treats History and CS the same.</td>
-                    <td>Adapts terminology based on auto-detected domain.</td>
+                    <td>Auto-detects domain and adapts terminology.</td>
                 </tr>
                 <tr>
                     <td>Note Structure</td>
                     <td>Chronological bullet points.</td>
-                    <td>Categorized by Concept, Topics, and Key Takeaways.</td>
+                    <td>Categorized by Topics, Concepts, and Key Takeaways.</td>
                 </tr>
                 <tr>
                     <td>Exam Relevance</td>
                     <td>Buried in text.</td>
-                    <td>Isolated and highlighted automatically.</td>
+                    <td>Isolated and highlighted automatically with regex + AI.</td>
                 </tr>
                 <tr>
                     <td>Hinglish Support</td>
                     <td>Forces translation to English.</td>
                     <td>Embraces native language mixing in notes.</td>
+                </tr>
+                <tr>
+                    <td>Visual Maps</td>
+                    <td>None.</td>
+                    <td>Interactive animated concept graph + DNA heatmap.</td>
+                </tr>
+                <tr>
+                    <td>Active Recall</td>
+                    <td>Not available.</td>
+                    <td>Auto-generated flashcards with flip-to-reveal.</td>
+                </tr>
+                <tr>
+                    <td>Follow-up Q&A</td>
+                    <td>Separate tool needed.</td>
+                    <td>Built-in streaming annotations grounded in your notes.</td>
+                </tr>
+                <tr>
+                    <td>File Size</td>
+                    <td>Typically 25–100 MB.</td>
+                    <td>Up to 1GB with client-side compression.</td>
                 </tr>
             </table>
         </section>
@@ -137,17 +288,41 @@
         <!-- FAQ -->
         <section class="guide-section">
             <h2>FAQ</h2>
-            <div style="margin-bottom: 1.5rem;">
-                <h3 style="font-size: 16px;">What if my recording is longer than 1 hour?</h3>
-                <p>To prevent API timeouts, DeLectured currently limits analysis to the first ~6000 words. For 2-hour seminars, we recommend splitting the audio file.</p>
+            <div class="guide-faq-item guide-hover-lift">
+                <h3 style="font-size: 16px;">What if my recording is larger than 25MB?</h3>
+                <p>No problem. DeLectured handles files <strong>up to 1GB</strong>. Your audio is decoded, resampled to
+                    16kHz mono, and compressed to 64kbps MP3 entirely in your browser before being sent to the API in
+                    10-minute segments.</p>
             </div>
-            <div style="margin-bottom: 1.5rem;">
+            <div class="guide-faq-item guide-hover-lift">
                 <h3 style="font-size: 16px;">Why do I need my own API key?</h3>
-                <p>Because DeLectured has no backend and is completely free. Providing your own Groq key allows you to use their extremely fast inference models at no cost to you (within their generous free tier).</p>
+                <p>Because DeLectured has no backend and is completely free. Providing your own Groq key allows you to
+                    use their extremely fast inference models at no cost to you (within their generous free tier).</p>
             </div>
-            <div style="margin-bottom: 1.5rem;">
+            <div class="guide-faq-item guide-hover-lift">
                 <h3 style="font-size: 16px;">Can I save my notes?</h3>
-                <p>Yes. Use the "Download .TXT" or "Print PDF" buttons at the bottom of the notes. Because there is no database, refreshing the page will clear your current notes.</p>
+                <p>Yes. Use the <strong>"Download Full Report"</strong> button to get a .TXT file containing the
+                    summary, concepts, and full transcript. You can also use <strong>"Print PDF"</strong> for a
+                    formatted version. Because there is no database, refreshing the page will clear your current notes.
+                </p>
+            </div>
+            <div class="guide-faq-item guide-hover-lift">
+                <h3 style="font-size: 16px;">What models does DeLectured use?</h3>
+                <p><strong>Transcription:</strong> <code>whisper-large-v3-turbo</code> via Groq. <strong>Domain
+                        Analysis:</strong> <code>llama-3.1-8b-instant</code> for fast classification. <strong>Study
+                        Guide Generation:</strong> <code>llama-3.3-70b-versatile</code> for exhaustive structuring.
+                    <strong>Q&A Chat:</strong> <code>llama-3.1-8b-instant</code> with streaming.
+                </p>
+            </div>
+            <div class="guide-faq-item guide-hover-lift">
+                <h3 style="font-size: 16px;">Can I process another lecture after finishing?</h3>
+                <p>Yes. After results are displayed, use the <strong>"Process Another Lecture"</strong> button at the
+                    bottom to reset and start fresh.</p>
+            </div>
+            <div class="guide-faq-item guide-hover-lift">
+                <h3 style="font-size: 16px;">What's the concept map?</h3>
+                <p>An interactive, animated canvas visualization where extracted concepts are shown as nodes connected
+                    by labeled relationships. The nodes gently drift and pulse — it's both useful and mesmerizing.</p>
             </div>
         </section>
     </div>
@@ -156,19 +331,27 @@
     <footer>
         <div>
             <div class="footer-logo">DeLectured</div>
-            <div>Built by <a href="https://github.com/mauryapranav" target="_blank" rel="noopener">Pranav Kumar Maurya</a></div>
+            <div>Built by <a href="https://github.com/mauryapranav" target="_blank" rel="noopener">Pranav Kumar
+                    Maurya</a></div>
         </div>
         <div style="text-align: right;">
-            <div>Groq · Whisper-large-v3 · LLaMA 3.1</div>
+            <div>Groq · Whisper-Turbo · LLaMA 3.3 70B</div>
             <div>No audio data stored. Ever.</div>
         </div>
     </footer>
 
+    <script src="ink-transition.js"></script>
     <script>
+        // Theme toggle with ink transition support
         document.getElementById('theme-toggle').addEventListener('click', () => {
-            const isDark = document.body.parentElement.getAttribute('data-theme') === 'dark';
-            document.body.parentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            if (window.InkTransition) {
+                window.InkTransition.toggle();
+            } else {
+                const isDark = document.body.parentElement.getAttribute('data-theme') === 'dark';
+                document.body.parentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            }
         });
     </script>
 </body>
+
 </html>

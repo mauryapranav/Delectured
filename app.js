@@ -431,12 +431,29 @@ function renderDNA(dnaArray) {
   const container = document.getElementById('dna-bars');
   if (!container || !dnaArray) return;
   container.innerHTML = '';
-  dnaArray.forEach(val => {
+  const maxVal = Math.max(...dnaArray, 1);
+  const segmentLabels = ['Intro', '', '', '', 'Early', '', '', '', '', 'Mid', '', '', '', '', 'Late', '', '', '', '', 'End'];
+  dnaArray.forEach((val, i) => {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'dna-bar-wrapper';
     const bar = document.createElement('div');
     bar.className = 'dna-bar';
-    bar.style.height = (val / 10) * 100 + '%';
-    bar.style.opacity = (val / 10);
-    container.appendChild(bar);
+    const pct = (val / maxVal) * 100;
+    bar.style.height = pct + '%';
+    // Color gradient: low = accent-2 (blue), high = accent (vermillion)
+    const ratio = val / maxVal;
+    bar.style.backgroundColor = ratio > 0.6 ? 'var(--accent)' : ratio > 0.3 ? 'var(--accent-2)' : 'var(--text-tertiary)';
+    bar.style.opacity = 0.4 + ratio * 0.6;
+    bar.title = `Segment ${i + 1}: density ${Math.round(pct)}%`;
+    wrapper.appendChild(bar);
+    // Label for key segments
+    if (segmentLabels[i]) {
+      const lbl = document.createElement('div');
+      lbl.className = 'dna-bar-label';
+      lbl.textContent = segmentLabels[i];
+      wrapper.appendChild(lbl);
+    }
+    container.appendChild(wrapper);
   });
 }
 
@@ -474,29 +491,48 @@ function renderConceptMap(graphData) {
   const ctx = canvas.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
 
-  // Resize function
   function resize() {
     const rect = canvas.parentElement.getBoundingClientRect();
     canvas.width = rect.width * dpr;
-    canvas.height = 400 * dpr;
+    canvas.height = 450 * dpr;
     canvas.style.width = `${rect.width}px`;
-    canvas.style.height = `400px`;
-    ctx.scale(dpr, dpr);
+    canvas.style.height = `450px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
   resize();
   window.addEventListener('resize', resize);
 
-  const width = canvas.width / dpr;
-  const height = 400;
+  const width = () => canvas.width / dpr;
+  const height = 450;
 
-  const nodes = graphData.nodes.map((n, i) => ({
-    ...n,
-    x: Math.random() * width,
-    y: Math.random() * height,
-    vx: (Math.random() - 0.5) * 1,
-    vy: (Math.random() - 0.5) * 1,
-    radius: 35 + (n.label.length * 1.5)
+  // Generate background stars
+  const bgStars = Array.from({ length: 80 }, () => ({
+    x: Math.random(),
+    y: Math.random(),
+    size: Math.random() * 1.5 + 0.3,
+    twinkleSpeed: Math.random() * 2000 + 1500,
+    twinkleOffset: Math.random() * Math.PI * 2
   }));
+
+  // Place concept stars with good spacing
+  const padding = 60;
+  const nodes = graphData.nodes.map((n, i) => {
+    const cols = Math.ceil(Math.sqrt(graphData.nodes.length));
+    const rows = Math.ceil(graphData.nodes.length / cols);
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const cellW = (width() - padding * 2) / cols;
+    const cellH = (height - padding * 2) / rows;
+    return {
+      ...n,
+      x: padding + cellW * col + cellW / 2 + (Math.random() - 0.5) * cellW * 0.4,
+      y: padding + cellH * row + cellH / 2 + (Math.random() - 0.5) * cellH * 0.3,
+      baseSize: 4 + Math.min(n.label.length * 0.3, 4),
+      twinkleSpeed: Math.random() * 1500 + 1000,
+      twinkleOffset: Math.random() * Math.PI * 2,
+      glowHue: i % 3 === 0 ? 'accent' : i % 3 === 1 ? 'accent2' : 'text'
+    };
+  });
 
   const links = (graphData.links || []).map(l => ({
     source: nodes.find(n => n.id === l.source),
@@ -506,79 +542,120 @@ function renderConceptMap(graphData) {
 
   if (graphAnimationId) cancelAnimationFrame(graphAnimationId);
 
+  function drawStar4(ctx, cx, cy, outerR, innerR) {
+    ctx.beginPath();
+    for (let i = 0; i < 4; i++) {
+      const angle = (i * Math.PI) / 2 - Math.PI / 2;
+      const nextAngle = angle + Math.PI / 4;
+      ctx.lineTo(cx + Math.cos(angle) * outerR, cy + Math.sin(angle) * outerR);
+      ctx.lineTo(cx + Math.cos(nextAngle) * innerR, cy + Math.sin(nextAngle) * innerR);
+    }
+    ctx.closePath();
+  }
+
   function animate() {
-    ctx.clearRect(0, 0, width, height);
+    const w = width();
+    const now = Date.now();
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 
     const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
     const accent2Color = getComputedStyle(document.documentElement).getPropertyValue('--accent-2').trim();
     const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim();
-    const borderColor = getComputedStyle(document.documentElement).getPropertyValue('--border-strong').trim();
-    const paperColor = getComputedStyle(document.documentElement).getPropertyValue('--paper-2').trim();
+    const bgColor = isDark ? '#0A0A08' : '#1a1a2e';
 
-    // Update positions & Physics (simple drift + collision)
-    nodes.forEach(n => {
-      n.x += n.vx;
-      n.y += n.vy;
+    // Dark sky background
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, w, height);
 
-      // Boundary bounce
-      if (n.x < n.radius) { n.x = n.radius; n.vx *= -0.8; }
-      if (n.x > width - n.radius) { n.x = width - n.radius; n.vx *= -0.8; }
-      if (n.y < n.radius) { n.y = n.radius; n.vy *= -0.8; }
-      if (n.y > height - n.radius) { n.y = height - n.radius; n.vy *= -0.8; }
+    // Subtle nebula glow
+    const nebulaGrad = ctx.createRadialGradient(w * 0.3, height * 0.4, 0, w * 0.3, height * 0.4, w * 0.5);
+    nebulaGrad.addColorStop(0, isDark ? 'rgba(200, 64, 42, 0.04)' : 'rgba(200, 64, 42, 0.06)');
+    nebulaGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = nebulaGrad;
+    ctx.fillRect(0, 0, w, height);
 
-      // Subtle pulse
-      n.pulse = Math.sin(Date.now() / 800) * 3;
+    const nebulaGrad2 = ctx.createRadialGradient(w * 0.7, height * 0.6, 0, w * 0.7, height * 0.6, w * 0.4);
+    nebulaGrad2.addColorStop(0, isDark ? 'rgba(27, 77, 142, 0.04)' : 'rgba(27, 77, 142, 0.06)');
+    nebulaGrad2.addColorStop(1, 'transparent');
+    ctx.fillStyle = nebulaGrad2;
+    ctx.fillRect(0, 0, w, height);
+
+    // Background stars
+    bgStars.forEach(s => {
+      const twinkle = 0.3 + 0.7 * ((Math.sin(now / s.twinkleSpeed + s.twinkleOffset) + 1) / 2);
+      ctx.beginPath();
+      ctx.arc(s.x * w, s.y * height, s.size, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(245, 240, 232, ${twinkle * 0.5})`;
+      ctx.fill();
     });
 
-    // Draw Links
-    ctx.beginPath();
-    ctx.strokeStyle = borderColor;
-    ctx.setLineDash([5, 5]);
-    ctx.lineWidth = 1;
+    // Constellation lines
     links.forEach(l => {
+      ctx.beginPath();
       ctx.moveTo(l.source.x, l.source.y);
       ctx.lineTo(l.target.x, l.target.y);
-    });
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Draw Nodes
-    nodes.forEach(n => {
-      // Shadow
-      ctx.shadowColor = 'rgba(0,0,0,0.05)';
-      ctx.shadowBlur = 10;
-
-      ctx.beginPath();
-      ctx.arc(n.x, n.y, n.radius + n.pulse, 0, Math.PI * 2);
-      ctx.fillStyle = paperColor;
-      ctx.fill();
-
-      ctx.shadowBlur = 0;
-      ctx.strokeStyle = accentColor;
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = `rgba(245, 240, 232, 0.12)`;
+      ctx.lineWidth = 0.8;
       ctx.stroke();
 
-      // Inner circle
-      ctx.beginPath();
-      ctx.arc(n.x, n.y, (n.radius + n.pulse) * 0.85, 0, Math.PI * 2);
-      ctx.strokeStyle = borderColor;
-      ctx.lineWidth = 0.5;
-      ctx.stroke();
-
-      ctx.fillStyle = textColor;
-      ctx.font = `italic 600 11px "Playfair Display"`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-
-      // Wrap text if too long
-      const words = n.label.split(' ');
-      if (words.length > 2) {
-        ctx.fillText(words.slice(0, 2).join(' '), n.x, n.y - 6);
-        ctx.fillText(words.slice(2).join(' '), n.x, n.y + 6);
-      } else {
-        ctx.fillText(n.label, n.x, n.y);
+      // Label on link
+      if (l.label) {
+        const mx = (l.source.x + l.target.x) / 2;
+        const my = (l.source.y + l.target.y) / 2;
+        ctx.font = `9px "IBM Plex Mono"`;
+        ctx.fillStyle = `rgba(245, 240, 232, 0.25)`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(l.label, mx, my - 6);
       }
     });
+
+    // Concept stars
+    nodes.forEach(n => {
+      const twinkle = 0.6 + 0.4 * ((Math.sin(now / n.twinkleSpeed + n.twinkleOffset) + 1) / 2);
+      const starSize = n.baseSize * (0.9 + twinkle * 0.2);
+      const glowColor = n.glowHue === 'accent' ? accentColor : n.glowHue === 'accent2' ? accent2Color : '#F5F0E8';
+
+      // Outer glow
+      const glow = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, starSize * 5);
+      glow.addColorStop(0, glowColor.replace(')', `, ${twinkle * 0.15})`).replace('rgb', 'rgba'));
+      glow.addColorStop(1, 'transparent');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, starSize * 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Star shape
+      drawStar4(ctx, n.x, n.y, starSize * 1.8, starSize * 0.5);
+      ctx.fillStyle = `rgba(245, 240, 232, ${twinkle * 0.9})`;
+      ctx.fill();
+
+      // Bright core
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, starSize * 0.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fill();
+
+      // Label
+      ctx.font = `italic 600 11px "Playfair Display"`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = `rgba(245, 240, 232, ${0.6 + twinkle * 0.3})`;
+      const words = n.label.split(' ');
+      if (words.length > 3) {
+        ctx.fillText(words.slice(0, 2).join(' '), n.x, n.y + starSize * 2.5);
+        ctx.fillText(words.slice(2).join(' '), n.x, n.y + starSize * 2.5 + 14);
+      } else {
+        ctx.fillText(n.label, n.x, n.y + starSize * 2.5);
+      }
+    });
+
+    // Corner label
+    ctx.font = `9px "IBM Plex Mono"`;
+    ctx.fillStyle = 'rgba(245, 240, 232, 0.25)';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('CONSTELLATION MAP', w - 12, height - 12);
 
     graphAnimationId = requestAnimationFrame(animate);
   }

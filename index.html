@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DeLectured | Every Lecture. Every Word. Structured.</title>
     <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
     <!-- 1. Top info strip -->
     <div class="top-strip fade-up">
@@ -20,7 +22,8 @@
             <input type="password" id="api-input" class="api-input" placeholder="gsk_...">
             <button class="btn" id="api-save">Save Key</button>
         </div>
-        <div style="margin-top: 1rem; color: var(--text-tertiary);">Get a free key at <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com</a></div>
+        <div style="margin-top: 1rem; color: var(--text-tertiary);">Get a free key at <a
+                href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com</a></div>
     </div>
 
     <!-- 3. Nav -->
@@ -46,11 +49,13 @@
                     Every Word.<br>
                     Structured.
                 </h1>
-                <p class="tagline">v1.6 Expert uses LLaMA 3.3 70B to transform raw audio into exhaustive study materials. Up to 1GB supported—get full technical depth, visual concept maps, and active recall sets in minutes.</p>
+                <p class="tagline">v1.6 Expert uses LLaMA 3.3 70B to transform raw audio into exhaustive study
+                    materials. Up to 1GB supported—get full technical depth, visual concept maps, and active recall sets
+                    in minutes.</p>
 
                 <table class="comparison-table" style="max-width: 600px; margin-top: 2rem;">
                     <tr>
-                        <th>Generic AI (ChatGPT/Otter)</th>
+                        <th>Other AI (ChatGPT etc.)</th>
                         <th>DeLectured Expert v1.6</th>
                     </tr>
                     <tr>
@@ -70,27 +75,32 @@
                     <span class="lang-chip" data-lang="auto">Auto-detect</span>
                 </div>
             </div>
-            
-            <div class="hero-visual-wrapper" style="display: flex; flex-direction: column; gap: 2rem; align-items: center;">
+
+            <div class="hero-visual-wrapper"
+                style="display: flex; flex-direction: column; gap: 2rem; align-items: center;">
                 <div class="hero-visual">
                     <div class="circle-visual"></div>
-                    <div style="font-family: var(--font-mono); font-size: 10px; color: var(--accent); position: absolute; bottom: 1rem; right: 1rem; text-align: right;">
+                    <div
+                        style="font-family: var(--font-mono); font-size: 10px; color: var(--accent); position: absolute; bottom: 1rem; right: 1rem; text-align: right;">
                         // EXPERT PIPELINE READY<br>
                         // LLAMA-3.3-70B ACTIVE
                     </div>
                 </div>
-                <a href="#upload-section" class="btn primary-btn" style="text-decoration:none; display:inline-block; width: 100%; text-align: center;">Start Structuring ?</a>
+                <a href="#upload-section" class="btn primary-btn"
+                    style="text-decoration:none; display:inline-block; width: 100%; text-align: center;">Start
+                    Structuring ?</a>
             </div>
         </div>
     </section>
 
-<!-- 5. Upload & How It Works section -->
+    <!-- 5. Upload & How It Works section -->
     <section id="upload-section" class="full-page-section fade-up" style="animation-delay: 0.3s;">
         <div class="container upload-page-grid">
             <div class="upload-col">
                 <h2 style="margin-bottom:2rem;">Upload Audio.</h2>
-                <p class="tagline" style="margin-bottom:2rem; font-size:1rem;">Supports files up to 1GB. Parallel Whisper-Turbo engine engaged.</p>
-                
+                <p class="tagline" style="margin-bottom:2rem; font-size:1rem;">Supports files up to 1GB. Parallel
+                    Whisper-Turbo engine engaged.</p>
+
                 <div class="upload-zone" id="upload-zone" style="margin: 0 0 2rem 0; width: 100%;">
                     <div class="upload-num">01</div>
                     <div class="upload-content">
@@ -101,7 +111,9 @@
                             <span class="upload-tag">WAV</span>
                             <span class="upload-tag">MP4</span>
                             <span class="upload-tag">AAC</span>
-                            <span class="upload-tag" style="background: var(--accent); color: white; border-color: var(--accent);">MAX 1GB</span>
+                            <span class="upload-tag"
+                                style="background: var(--accent); color: white; border-color: var(--accent);">MAX
+                                1GB</span>
                         </div>
                     </div>
                 </div>
@@ -109,7 +121,8 @@
 
                 <!-- 6. Processing terminal -->
                 <div class="terminal" id="terminal">
-                    <div class="progress-container" id="progress-container" style="display:none; margin-bottom: 1.5rem;">
+                    <div class="progress-container" id="progress-container"
+                        style="display:none; margin-bottom: 1.5rem;">
                         <div class="progress-label" id="progress-label">INITIALIZING...</div>
                         <div class="progress-bar-bg">
                             <div class="progress-bar-fill" id="progress-bar-fill"></div>
@@ -118,17 +131,19 @@
                     <div id="terminal-content"></div>
                 </div>
             </div>
-            
+
             <div class="how-it-works-col">
                 <h2 style="margin-bottom:2rem;">Expert Pipeline</h2>
                 <ul class="step-list">
                     <li class="step-item">
                         <h3>Parallel Whisper-Turbo</h3>
-                        <p>We split your audio into optimized segments and transcribe them simultaneously. This enables massive 1GB files to be processed in minutes.</p>
+                        <p>We split your audio into optimized segments and transcribe them simultaneously. This enables
+                            massive 1GB files to be processed in minutes.</p>
                     </li>
                     <li class="step-item">
                         <h3>70B Intelligent Structuring</h3>
-                        <p>Our final pass uses LLaMA 3.3 70B to act as a Subject Matter Expert, generating 500+ word technical summaries and exhaustive notes.</p>
+                        <p>Our final pass uses LLaMA 3.3 70B to act as a Subject Matter Expert, generating 500+ word
+                            technical summaries and exhaustive notes.</p>
                     </li>
                 </ul>
             </div>
@@ -137,7 +152,7 @@
 
     <!-- 7. Results -->
     <section class="results container" id="results">
-        
+
         <div class="result-card">
             <!-- Stage 1 Badges -->
             <div id="badges-container" style="margin-bottom: 1rem;"></div>
@@ -148,31 +163,41 @@
                 <div class="score-box">
                     <div class="label">CLARITY</div>
                     <div class="score-num" id="score-clarity">--</div>
-                    <div class="score-bar-container"><div class="score-bar"></div></div>
+                    <div class="score-bar-container">
+                        <div class="score-bar"></div>
+                    </div>
                     <div class="label" id="lbl-clarity">--</div>
                 </div>
                 <div class="score-box">
                     <div class="label">CONTENT DENSITY</div>
                     <div class="score-num" id="score-density">--</div>
-                    <div class="score-bar-container"><div class="score-bar"></div></div>
+                    <div class="score-bar-container">
+                        <div class="score-bar"></div>
+                    </div>
                     <div class="label" id="lbl-density">--</div>
                 </div>
                 <div class="score-box">
                     <div class="label">PACE</div>
                     <div class="score-num" id="score-pace">--</div>
-                    <div class="score-bar-container"><div class="score-bar"></div></div>
+                    <div class="score-bar-container">
+                        <div class="score-bar"></div>
+                    </div>
                     <div class="label" id="lbl-pace">--</div>
                 </div>
                 <div class="score-box">
                     <div class="label">CONCEPTS</div>
                     <div class="score-num" id="score-concepts">--</div>
-                    <div class="score-bar-container"><div class="score-bar"></div></div>
+                    <div class="score-bar-container">
+                        <div class="score-bar"></div>
+                    </div>
                     <div class="label" id="lbl-concepts">FOUND</div>
                 </div>
                 <div class="score-box">
                     <div class="label">REVISION</div>
                     <div class="score-num" id="score-revision">--</div>
-                    <div class="score-bar-container"><div class="score-bar"></div></div>
+                    <div class="score-bar-container">
+                        <div class="score-bar"></div>
+                    </div>
                     <div class="label" id="lbl-revision">MINUTES</div>
                 </div>
             </div>
@@ -197,7 +222,9 @@
             <div class="label" style="margin-bottom: 2rem;">CONCEPT MAP VISUALIZATION</div>
             <div class="concept-graph-container">
                 <canvas id="concept-canvas"></canvas>
-                <div style="position: absolute; bottom: 1rem; right: 1rem; font-family: var(--font-mono); font-size: 9px; color: var(--text-tertiary);">Interactive • Animated</div>
+                <div
+                    style="position: absolute; bottom: 1rem; right: 1rem; font-family: var(--font-mono); font-size: 9px; color: var(--text-tertiary);">
+                    Interactive • Animated</div>
             </div>
         </div>
 
@@ -214,9 +241,9 @@
 
         <div class="result-card">
             <!-- Notes Columns -->
-            <div class="notes-grid" style="grid-template-columns: 1fr 1fr; border-top:none; margin:0;">
+            <div class="notes-grid" style="border-top:none; margin:0;">
                 <div id="col-topics"></div>
-                <div id="col-concepts" style="border-left: 1px solid var(--border); padding-left: 2rem;"></div>
+                <div id="col-concepts" style="padding-top: 1rem; border-top: 1px solid var(--border);"></div>
             </div>
         </div>
 
@@ -235,7 +262,8 @@
                 <div class="chat-history" id="chat-history"></div>
                 <div class="chat-input-wrapper">
                     <span class="chat-icon">✎</span>
-                    <input type="text" id="chat-input" class="chat-input" placeholder="Ask a question about the lecture...">
+                    <input type="text" id="chat-input" class="chat-input"
+                        placeholder="Ask a question about the lecture...">
                 </div>
             </div>
         </div>
@@ -257,7 +285,8 @@
         <div style="margin-top: 2rem; display: flex; flex-wrap: wrap; gap: 1rem; padding-bottom: 4rem;">
             <button class="btn" id="btn-download" style="flex:1;">Download Full Report</button>
             <button class="btn" id="btn-print" style="flex:1;">Print PDF</button>
-            <button class="btn" id="btn-process-another" style="flex:1; border-color:var(--accent); color:var(--accent);">PROCESS ANOTHER LECTURE</button>
+            <button class="btn" id="btn-process-another"
+                style="flex:1; border-color:var(--accent); color:var(--accent);">PROCESS ANOTHER LECTURE</button>
         </div>
 
     </section>
@@ -266,7 +295,8 @@
     <footer>
         <div>
             <div class="footer-logo">DeLectured</div>
-            <div>Built by <a href="https://github.com/mauryapranav" target="_blank" rel="noopener">Pranav Kumar Maurya</a></div>
+            <div>Built by <a href="https://github.com/mauryapranav" target="_blank" rel="noopener">Pranav Kumar
+                    Maurya</a></div>
         </div>
         <div style="text-align: right;">
             <div>Groq · Whisper-Turbo · LLaMA 3.3 70B</div>
@@ -278,4 +308,5 @@
     <script src="ink-transition.js"></script>
     <script src="app.js"></script>
 </body>
+
 </html>

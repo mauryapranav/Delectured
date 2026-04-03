@@ -622,18 +622,46 @@ nav {
 .dna-bars {
   display: flex;
   align-items: flex-end;
-  justify-content: space-between;
   gap: 2px;
-  height: 50px;
+  height: 80px;
   margin-top: 1rem;
   width: 100%;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1.2rem;
+  position: relative;
+  overflow: visible;
+}
+
+.dna-bar-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  position: relative;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .dna-bar {
-  flex: 1;
+  width: 100%;
+  max-width: 20px;
   background-color: var(--accent);
   height: 0;
-  transition: height 1s;
+  transition: height 1s, background-color 0.3s;
+  border-radius: 2px 2px 0 0;
+  cursor: default;
+}
+
+.dna-bar-label {
+  position: absolute;
+  bottom: -1.2rem;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
 }
 
 /* Concept Graph */
@@ -652,15 +680,15 @@ nav {
 
 #concept-canvas {
   width: 100%;
-  height: 400px;
-  cursor: move;
+  height: 450px;
+  cursor: default;
 }
 
 /* Notes Grid */
 .notes-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2rem;
+  grid-template-columns: 1fr;
+  gap: 3rem;
   margin: 4rem 0;
 }
 
@@ -971,4 +999,182 @@ footer {
 .theme-clone[data-theme="light"] {
   background-color: #F5F0E8;
   color: #0A0A08;
+}
+
+/* ==========================================
+   GUIDE PAGE — Decorative Animations
+   Scoped to guide-only classes. No collisions.
+   ========================================== */
+
+/* Floating Ink Blot Particles */
+.guide-ink-particles {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.guide-ink-blot {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.12;
+  animation: guideInkDrift var(--dur) ease-in-out var(--delay) infinite alternate;
+  will-change: transform, opacity;
+}
+
+[data-theme="dark"] .guide-ink-blot {
+  opacity: 0.08;
+}
+
+@keyframes guideInkDrift {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.12;
+  }
+
+  25% {
+    transform: translate(calc(var(--drift) * 0.6), calc(var(--drift) * -0.4)) scale(1.4);
+    opacity: 0.18;
+  }
+
+  50% {
+    transform: translate(calc(var(--drift) * -0.3), calc(var(--drift) * 0.7)) scale(0.8);
+    opacity: 0.08;
+  }
+
+  75% {
+    transform: translate(calc(var(--drift) * 0.8), calc(var(--drift) * 0.2)) scale(1.6);
+    opacity: 0.15;
+  }
+
+  100% {
+    transform: translate(calc(var(--drift) * -0.5), calc(var(--drift) * -0.6)) scale(1.1);
+    opacity: 0.10;
+  }
+}
+
+/* Pipeline Visual */
+.guide-pipeline {
+  margin-top: 2rem;
+  position: relative;
+}
+
+.guide-pipeline-step {
+  display: flex;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  background: var(--paper-2);
+  position: relative;
+  z-index: 1;
+}
+
+.guide-pipeline-step h3 {
+  margin-bottom: 0.5rem;
+}
+
+.guide-pipeline-step p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.guide-pipeline-num {
+  font-family: var(--font-serif);
+  font-size: 2.5rem;
+  font-style: italic;
+  color: var(--accent);
+  min-width: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+}
+
+.guide-pipeline-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 0;
+  z-index: 0;
+}
+
+.guide-pipeline-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: guidePipelinePulse 1.5s ease-in-out infinite;
+}
+
+.guide-pipeline-dot:nth-child(2) {
+  animation-delay: 0.3s;
+}
+
+.guide-pipeline-dot:nth-child(3) {
+  animation-delay: 0.6s;
+}
+
+@keyframes guidePipelinePulse {
+
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: scale(0.8);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.5);
+  }
+}
+
+/* Hover Lift for Guide Items */
+.guide-hover-lift {
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.guide-hover-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="dark"] .guide-hover-lift:hover {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* FAQ Item Styling */
+.guide-faq-item {
+  margin-bottom: 1.5rem;
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  background: var(--paper-2);
+}
+
+.guide-faq-item h3 {
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
+
+.guide-faq-item p {
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.guide-faq-item code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--paper-3);
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--border);
 }
