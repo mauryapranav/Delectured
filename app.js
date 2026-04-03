@@ -95,37 +95,68 @@ const els = {
 
 let selectedLanguage = 'en';
 
+let lastCorner = -1;
 function init() {
   updateApiStatus();
+  
   els.themeToggle.addEventListener('click', () => {
     const isDark = document.body.parentElement.getAttribute('data-theme') === 'dark';
     const nextTheme = isDark ? 'light' : 'dark';
+    const overlay = document.getElementById('ink-spread-overlay');
+    const path = document.getElementById('ink-spread-path');
     
-    const corners = [
-      {x: '0%', y: '0%'},
-      {x: '100%', y: '0%'},
-      {x: '0%', y: '100%'},
-      {x: '100%', y: '100%'}
-    ];
-    const corner = corners[Math.floor(Math.random() * corners.length)];
-    const ink = document.getElementById('ink-spread');
-    
-    if (ink) {
-      ink.style.setProperty('--spread-x', corner.x);
-      ink.style.setProperty('--spread-y', corner.y);
-      ink.classList.remove('active', 'fade-out');
-      void ink.offsetWidth;
-      ink.classList.add('active');
-      
-      setTimeout(() => {
+    if (!overlay || !path) {
         document.body.parentElement.setAttribute('data-theme', nextTheme);
-        setTimeout(() => {
-          ink.classList.add('fade-out');
-        }, 300);
-      }, 700);
-    } else {
-      document.body.parentElement.setAttribute('data-theme', nextTheme);
+        return;
     }
+
+    const corners = [
+      {x: 0, y: 0, name: 'top-left'},
+      {x: 100, y: 0, name: 'top-right'},
+      {x: 0, y: 100, name: 'bottom-left'},
+      {x: 100, y: 100, name: 'bottom-right'}
+    ];
+    
+    let cornerIdx;
+    do { cornerIdx = Math.floor(Math.random() * corners.length); } while (cornerIdx === lastCorner);
+    lastCorner = cornerIdx;
+    const corner = corners[cornerIdx];
+
+    // Material Physics: Organic blob path
+    // We use a simplified organic shape that scales from the corner
+    const organicPath = "M-20,-20 Q50,-40 120,-20 Q140,50 120,120 Q50,140 -20,120 Q-40,50 -20,-20 Z";
+    path.setAttribute('d', organicPath);
+    
+    // Set origin to the chosen corner
+    path.style.transformOrigin = `${corner.x}% ${corner.y}%`;
+    path.style.transform = 'scale(0)';
+    
+    // Color logic: Ink color for Light->Dark, Paper color for Dark->Light
+    const inkColor = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim();
+    const paperColor = getComputedStyle(document.documentElement).getPropertyValue('--paper').trim();
+    path.style.fill = isDark ? paperColor : inkColor;
+
+    // Easing selection based on direction
+    const easing = isDark ? 'var(--dissolve-ease)' : 'var(--ink-ease)';
+    path.style.transition = `transform 1.4s ${easing}`;
+
+    overlay.classList.add('active');
+    
+    // Trigger animation
+    requestAnimationFrame(() => {
+        path.style.transform = 'scale(2.5)';
+    });
+
+    // Theme swap mid-animation for seamless transition
+    setTimeout(() => {
+        document.body.parentElement.setAttribute('data-theme', nextTheme);
+    }, 700);
+
+    // Cleanup
+    setTimeout(() => {
+        overlay.classList.remove('active');
+        path.style.transform = 'scale(0)';
+    }, 1500);
   });
   els.apiToggle.addEventListener('click', (e) => {
     e.preventDefault();

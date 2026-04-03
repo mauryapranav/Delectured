@@ -201,23 +201,35 @@ nav { display: flex; justify-content: space-between; align-items: center; paddin
 .chat-input { flex-grow: 1; background: transparent; border: none; font-family: var(--font-sans); font-size: 15px; color: var(--text-primary); outline: none; padding: 0.5rem; }
 
 /* Ink Spread Animation */
-#ink-spread {
+#ink-spread-overlay {
   position: fixed;
   top: 0; left: 0;
   width: 100vw; height: 100vh;
-  background: var(--ink);
   z-index: 10000;
   pointer-events: none;
-  clip-path: circle(0% at 0% 0%);
-  transition: clip-path 1.2s cubic-bezier(0.65, 0, 0.35, 1);
-}
-#ink-spread.active {
-  clip-path: circle(150% at var(--spread-x) var(--spread-y));
-}
-#ink-spread.fade-out {
   opacity: 0;
-  transition: opacity 0.5s ease-out;
+  visibility: hidden;
+  transition: opacity 0.4s ease;
 }
+
+#ink-spread-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+#ink-spread-path {
+  fill: var(--ink);
+  filter: url(#ink-bleed-filter);
+  transform-origin: center;
+  transition: transform 1.2s var(--ink-ease), d 1.2s var(--ink-ease);
+}
+
+:root {
+  --ink-ease: cubic-bezier(0.7, 0, 0.3, 1);
+  --dissolve-ease: cubic-bezier(0.15, 0.85, 0.35, 1);
+  /* ... existing vars ... */
+}
+
 
 /* Transcript */
 .transcript-section { margin: 4rem 0; border-top: 1px solid var(--border); padding-top: 2rem; }
