@@ -3,13 +3,13 @@
 // ==========================================
 
 const MAX_SIZE = 25 * 1024 * 1024;
-const CHUNK_DURATION = 10 * 60; 
+const CHUNK_DURATION = 10 * 60;
 const TARGET_SAMPLE_RATE = 16000;
-const CONCURRENCY_LIMIT = 2; 
-const CHUNK_OVERLAP_S = 3; 
+const CONCURRENCY_LIMIT = 2;
+const CHUNK_OVERLAP_S = 3;
 
 const ALLOWED_TYPES = [
-  'audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/ogg', 
+  'audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/ogg',
   'audio/flac', 'video/mp4', 'audio/webm', 'audio/amr', 'audio/aac'
 ];
 
@@ -38,9 +38,9 @@ async function processAudioFile(file) {
     }
     const blobs = [];
     for (let i = 0; i < chunks.length; i++) {
-        logTerminal(`[1/5] PREPARING AUDIO: Compressing segment ${i+1}/${chunks.length}...`, true);
-        updateProgress(10 + (i/chunks.length)*10, `Encoding...`);
-        blobs.push(await audioBufferToMp3BlobAsync(chunks[i]));
+      logTerminal(`[1/5] PREPARING AUDIO: Compressing segment ${i + 1}/${chunks.length}...`, true);
+      updateProgress(10 + (i / chunks.length) * 10, `Encoding...`);
+      blobs.push(await audioBufferToMp3BlobAsync(chunks[i]));
     }
     logTerminal(`[1/5] PREPARING AUDIO: Complete`, true);
     return blobs;
@@ -56,7 +56,7 @@ async function audioBufferToMp3BlobAsync(buffer) {
   for (let i = 0; i < samples.length; i++) {
     const s = Math.max(-1, Math.min(1, samples[i]));
     samplesInt16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-    if (i % 100000 === 0) await new Promise(r => setTimeout(r, 0)); 
+    if (i % 100000 === 0) await new Promise(r => setTimeout(r, 0));
   }
   const mp3Data = [];
   const sampleBlockSize = 1152;
@@ -98,29 +98,18 @@ let selectedLanguage = 'en';
 let lastCorner = -1;
 function init() {
   updateApiStatus();
-  
+
   els.themeToggle.addEventListener('click', () => {
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    
-    // Apply universal transition class to ensure everything changes simultaneously
-    document.body.classList.add('theme-transition');
-    
-    // Swap the theme
-    document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
-    
-    // Remove the transition class after it completes (300ms) to prevent lag on regular hover states
-    setTimeout(() => {
-        document.body.classList.remove('theme-transition');
-    }, 300);
+    if (window.InkTransition) window.InkTransition.toggle();
   });
   els.apiToggle.addEventListener('click', (e) => {
     e.preventDefault();
     els.apiPanel.classList.toggle('active');
-    if(els.apiPanel.classList.contains('active') && !apiKey) els.apiInput.focus();
+    if (els.apiPanel.classList.contains('active') && !apiKey) els.apiInput.focus();
   });
   els.apiSave.addEventListener('click', () => {
     const val = els.apiInput.value.trim();
-    if(val) { apiKey = val; localStorage.setItem('groq_api_key', apiKey); updateApiStatus(); els.apiPanel.classList.remove('active'); }
+    if (val) { apiKey = val; localStorage.setItem('groq_api_key', apiKey); updateApiStatus(); els.apiPanel.classList.remove('active'); }
   });
   if (apiKey) els.apiInput.value = apiKey;
   els.langChips.forEach(chip => {
@@ -137,12 +126,12 @@ function init() {
   });
   els.uploadZone.addEventListener('click', () => els.fileInput.click());
   els.fileInput.addEventListener('change', (e) => { if (e.target.files.length) handleFile(e.target.files[0]); });
-  
+
   if (els.processAnother) {
     els.processAnother.addEventListener('click', () => {
-        if (confirm("Reset and process another lecture? All current data will be cleared.")) {
-            location.reload();
-        }
+      if (confirm("Reset and process another lecture? All current data will be cleared.")) {
+        location.reload();
+      }
     });
   }
 
@@ -185,10 +174,10 @@ async function handleFile(file) {
   els.terminal.style.display = 'block';
   els.terminalContent.innerHTML = '';
   document.getElementById('results').style.display = 'none';
-  
+
   updateProgress(5, "Initializing...");
   logTerminal("DeLectured v1.6.7 - Stability Engine Engaged");
-  
+
   try {
     const audioBlobs = await processAudioFile(file);
     logTerminal("[2/5] TRANSCRIBING LECTURE");
@@ -202,21 +191,21 @@ async function handleFile(file) {
           try {
             let text = null;
             for (let attempt = 1; attempt <= 3; attempt++) {
-                try {
-                    text = await transcribeAudio(audioBlobs[idx]);
-                    break;
-                } catch (e) {
-                    if (attempt === 3) throw e;
-                    logTerminal(`[RETRY] Part ${idx+1} failed. Attempt ${attempt+1}/3...`, true);
-                    await new Promise(r => setTimeout(r, 2000));
-                }
+              try {
+                text = await transcribeAudio(audioBlobs[idx]);
+                break;
+              } catch (e) {
+                if (attempt === 3) throw e;
+                logTerminal(`[RETRY] Part ${idx + 1} failed. Attempt ${attempt + 1}/3...`, true);
+                await new Promise(r => setTimeout(r, 2000));
+              }
             }
             results[idx] = text;
             completed++;
             logTerminal(`[2/5] TRANSCRIBING LECTURE: Received part ${completed}/${audioBlobs.length}...`, true);
-            updateProgress(20 + (completed/audioBlobs.length)*50, `Transcribing...`);
+            updateProgress(20 + (completed / audioBlobs.length) * 50, `Transcribing...`);
           } catch (e) {
-            throw new Error(`Part ${idx+1} failed after 3 attempts: ${e.message}`);
+            throw new Error(`Part ${idx + 1} failed after 3 attempts: ${e.message}`);
           }
         })());
       }
@@ -226,40 +215,40 @@ async function handleFile(file) {
     const fullTranscript = results.join(" ");
     currentTranscript = fullTranscript;
     document.getElementById('raw-text').textContent = fullTranscript;
-    
+
     updateProgress(75, "Analyzing Structure...");
     logTerminal("[3/5] ANALYZING LECTURE DOMAIN");
     const analysis = await analyzeTranscriptStage1(fullTranscript);
-    
+
     updateProgress(85, "Expert Intelligence...");
     logTerminal("[4/5] GENERATING HIGH-DENSITY STUDY GUIDE (70B)");
     const notesJson = await generateNotesStage2(fullTranscript, analysis);
     currentNotes = notesJson;
-    
+
     updateProgress(95, "Finalizing Visuals...");
     logTerminal("[5/5] RENDERING RESULTS");
-    
+
     // Critical: Show results and scroll first so user sees it even if rendering has tiny issues
     els.terminal.style.display = 'none';
     els.results.style.display = 'block';
     updateProgress(100, "Done");
     els.results.scrollIntoView({ behavior: 'smooth' });
-    
+
     // Defensive rendering loop
-    try { renderStage1Badges(analysis); } catch(e) { console.warn("Badge error", e); }
-    try { renderScore(notesJson.score); } catch(e) { console.warn("Score error", e); }
-    try { renderPullquote(notesJson.notes?.summary || ""); } catch(e) { console.warn("Summary error", e); }
-    try { renderDNA(notesJson.lecture_dna || Array(20).fill(5)); } catch(e) { console.warn("DNA error", e); }
-    try { renderNotesGrid(notesJson.notes); } catch(e) { console.warn("Grid error", e); }
-    try { renderFlashcards(notesJson.flashcards); } catch(e) { console.warn("Flash error", e); }
-    try { 
-        if(notesJson.concept_graph) renderConceptMap(notesJson.concept_graph);
-        else if(notesJson.concept_map) {
-            // Simple fallback if old format returned
-            renderConceptMap({nodes:[{id:'n1', label:'Concept Map Rendered'}], links:[]});
-        }
-    } catch(e) { console.warn("Map error", e); }
-    
+    try { renderStage1Badges(analysis); } catch (e) { console.warn("Badge error", e); }
+    try { renderScore(notesJson.score); } catch (e) { console.warn("Score error", e); }
+    try { renderPullquote(notesJson.notes?.summary || ""); } catch (e) { console.warn("Summary error", e); }
+    try { renderDNA(notesJson.lecture_dna || Array(20).fill(5)); } catch (e) { console.warn("DNA error", e); }
+    try { renderNotesGrid(notesJson.notes); } catch (e) { console.warn("Grid error", e); }
+    try { renderFlashcards(notesJson.flashcards); } catch (e) { console.warn("Flash error", e); }
+    try {
+      if (notesJson.concept_graph) renderConceptMap(notesJson.concept_graph);
+      else if (notesJson.concept_map) {
+        // Simple fallback if old format returned
+        renderConceptMap({ nodes: [{ id: 'n1', label: 'Concept Map Rendered' }], links: [] });
+      }
+    } catch (e) { console.warn("Map error", e); }
+
   } catch (error) {
     logTerminal(`[FATAL ERROR] ${error.message}`);
     const retryBtn = document.createElement('button');
@@ -273,37 +262,37 @@ async function transcribeAudio(blob) {
   const formData = new FormData();
   formData.append('file', blob, 'lecture_segment.mp3');
   formData.append('model', 'whisper-large-v3-turbo');
-  if(selectedLanguage !== 'auto') formData.append('language', selectedLanguage);
+  if (selectedLanguage !== 'auto') formData.append('language', selectedLanguage);
   const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${apiKey}` },
     body: formData
   });
   if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error?.message || `Status ${res.status}`);
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Status ${res.status}`);
   }
   const data = await res.json();
   return data.text;
 }
 
 async function analyzeTranscriptStage1(text) {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            model: "llama-3.1-8b-instant",
-            messages: [{ role: "user", content: `Analyze domain and subject. JSON: { "domain": "...", "subject": "..." }. Transcript: ${text.substring(0, 5000)}` }],
-            response_format: { type: "json_object" }
-        })
-    });
-    const data = await res.json();
-    return JSON.parse(data.choices[0].message.content);
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: "llama-3.1-8b-instant",
+      messages: [{ role: "user", content: `Analyze domain and subject. JSON: { "domain": "...", "subject": "..." }. Transcript: ${text.substring(0, 5000)}` }],
+      response_format: { type: "json_object" }
+    })
+  });
+  const data = await res.json();
+  return JSON.parse(data.choices[0].message.content);
 }
 
 async function generateNotesStage2(transcript, analysis) {
-    const wordCount = transcript.split(' ').length;
-    const prompt = `You are a Subject Matter Expert in ${analysis.domain}. 
+  const wordCount = transcript.split(' ').length;
+  const prompt = `You are a Subject Matter Expert in ${analysis.domain}. 
     TASK: Transform this ${wordCount}-word transcript into an EXHAUSTIVE, high-density study guide.
     1. SUMMARY: Minimum 500 words technical explaining the core thesis.
     2. CONCEPTS: Extract 20 concepts with deep definitions.
@@ -326,88 +315,88 @@ async function generateNotesStage2(transcript, analysis) {
       "lecture_dna": [20 integers]
     }
     Transcript: ${transcript}`;
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: "llama-3.3-70b-versatile", messages: [{ role: "user", content: prompt }], temperature: 0.1, response_format: { type: "json_object" } })
-    });
-    const data = await res.json();
-    return JSON.parse(data.choices[0].message.content);
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: "llama-3.3-70b-versatile", messages: [{ role: "user", content: prompt }], temperature: 0.1, response_format: { type: "json_object" } })
+  });
+  const data = await res.json();
+  return JSON.parse(data.choices[0].message.content);
 }
 
 async function handleChat(msg) {
-    if (!currentNotes) return;
-    const chatHistoryEl = document.getElementById('chat-history');
-    
-    const userEl = document.createElement('div');
-    userEl.className = 'chat-msg chat-user'; 
-    userEl.setAttribute('data-label', 'QUESTION');
-    userEl.textContent = msg;
-    chatHistoryEl.appendChild(userEl);
-    
-    const aiEl = document.createElement('div');
-    aiEl.className = 'chat-msg chat-ai'; 
-    aiEl.setAttribute('data-label', 'DELECTURED INSIGHT');
-    aiEl.innerHTML = '<div class="chat-ai-content"><p>...</p></div>';
-    chatHistoryEl.appendChild(aiEl);
-    
-    const contentEl = aiEl.querySelector('.chat-ai-content');
-    let fullText = "";
+  if (!currentNotes) return;
+  const chatHistoryEl = document.getElementById('chat-history');
 
-    try {
-        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                model: "llama-3.1-8b-instant", 
-                messages: [
-                    { role: 'system', content: `You are a professional academic assistant. Format your response with clear structure. Use **bold** for key terms. Break long answers into paragraphs. Context: ${JSON.stringify(currentNotes.notes)}` }, 
-                    { role: 'user', content: msg }
-                ], 
-                stream: true 
-            })
-        });
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            const chunk = decoder.decode(value);
-            const lines = chunk.split("\n");
-            for (const line of lines) {
-                if (line.startsWith("data: ") && line !== "data: [DONE]") {
-                    try {
-                        const token = JSON.parse(line.substring(6)).choices[0]?.delta?.content;
-                        if (token) {
-                            fullText += token;
-                            contentEl.innerHTML = formatAIChat(fullText);
-                        }
-                    } catch (e) {}
-                }
+  const userEl = document.createElement('div');
+  userEl.className = 'chat-msg chat-user';
+  userEl.setAttribute('data-label', 'QUESTION');
+  userEl.textContent = msg;
+  chatHistoryEl.appendChild(userEl);
+
+  const aiEl = document.createElement('div');
+  aiEl.className = 'chat-msg chat-ai';
+  aiEl.setAttribute('data-label', 'DELECTURED INSIGHT');
+  aiEl.innerHTML = '<div class="chat-ai-content"><p>...</p></div>';
+  chatHistoryEl.appendChild(aiEl);
+
+  const contentEl = aiEl.querySelector('.chat-ai-content');
+  let fullText = "";
+
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: "llama-3.1-8b-instant",
+        messages: [
+          { role: 'system', content: `You are a professional academic assistant. Format your response with clear structure. Use **bold** for key terms. Break long answers into paragraphs. Context: ${JSON.stringify(currentNotes.notes)}` },
+          { role: 'user', content: msg }
+        ],
+        stream: true
+      })
+    });
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value);
+      const lines = chunk.split("\n");
+      for (const line of lines) {
+        if (line.startsWith("data: ") && line !== "data: [DONE]") {
+          try {
+            const token = JSON.parse(line.substring(6)).choices[0]?.delta?.content;
+            if (token) {
+              fullText += token;
+              contentEl.innerHTML = formatAIChat(fullText);
             }
+          } catch (e) { }
         }
-    } catch(e) { contentEl.textContent = `Error: ${e.message}`; }
-    chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
+      }
+    }
+  } catch (e) { contentEl.textContent = `Error: ${e.message}`; }
+  chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
 }
 
 function formatAIChat(text) {
-    let formatted = text
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\n\n/g, '</p><p>')
-        .replace(/\n/g, '<br>')
-        .replace(/^\* (.*)/gm, '<li>$1</li>');
-    
-    if (formatted.includes('<li>')) {
-        const parts = formatted.split(/<li>/);
-        let result = parts[0];
-        if (!result.includes('<ul>')) result += '<ul>';
-        for(let i=1; i<parts.length; i++) {
-            result += '<li>' + parts[i];
-        }
-        result += '</ul>';
-        formatted = result;
+  let formatted = text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>')
+    .replace(/^\* (.*)/gm, '<li>$1</li>');
+
+  if (formatted.includes('<li>')) {
+    const parts = formatted.split(/<li>/);
+    let result = parts[0];
+    if (!result.includes('<ul>')) result += '<ul>';
+    for (let i = 1; i < parts.length; i++) {
+      result += '<li>' + parts[i];
     }
-    return `<p>${formatted}</p>`;
+    result += '</ul>';
+    formatted = result;
+  }
+  return `<p>${formatted}</p>`;
 }
 
 function logTerminal(msg, update = false) {
@@ -417,208 +406,208 @@ function logTerminal(msg, update = false) {
 }
 
 function renderStage1Badges(analysis) {
-    const container = document.getElementById('badges-container');
-    if (!container) return;
-    const dom = (analysis?.domain || "GENERAL").toUpperCase();
-    const sub = (analysis?.subject || "LECTURE").toUpperCase();
-    container.innerHTML = `<span class="badge">◆ ${dom}</span><span class="badge">◆ ${sub}</span>`;
+  const container = document.getElementById('badges-container');
+  if (!container) return;
+  const dom = (analysis?.domain || "GENERAL").toUpperCase();
+  const sub = (analysis?.subject || "LECTURE").toUpperCase();
+  container.innerHTML = `<span class="badge">◆ ${dom}</span><span class="badge">◆ ${sub}</span>`;
 }
 
 function renderScore(score) {
-    if (!score) return;
-    document.getElementById('score-clarity').textContent = score.clarity || "--";
-    document.getElementById('score-density').textContent = score.density || "--";
-    document.getElementById('score-pace').textContent = score.pace || "--";
-    document.getElementById('score-concepts').textContent = score.concept_count || "--";
-    document.getElementById('score-revision').textContent = score.revision_mins || "--";
+  if (!score) return;
+  document.getElementById('score-clarity').textContent = score.clarity || "--";
+  document.getElementById('score-density').textContent = score.density || "--";
+  document.getElementById('score-pace').textContent = score.pace || "--";
+  document.getElementById('score-concepts').textContent = score.concept_count || "--";
+  document.getElementById('score-revision').textContent = score.revision_mins || "--";
 }
 
-function renderPullquote(text) { 
-    const el = document.getElementById('summary-quote');
-    if (el) el.innerHTML = (text || "").replace(/\n/g, '<br>'); 
+function renderPullquote(text) {
+  const el = document.getElementById('summary-quote');
+  if (el) el.innerHTML = (text || "").replace(/\n/g, '<br>');
 }
 
 function renderDNA(dnaArray) {
-    const container = document.getElementById('dna-bars');
-    if (!container || !dnaArray) return;
-    container.innerHTML = '';
-    dnaArray.forEach(val => {
-        const bar = document.createElement('div');
-        bar.className = 'dna-bar';
-        bar.style.height = (val / 10) * 100 + '%'; 
-        bar.style.opacity = (val / 10);
-        container.appendChild(bar);
-    });
+  const container = document.getElementById('dna-bars');
+  if (!container || !dnaArray) return;
+  container.innerHTML = '';
+  dnaArray.forEach(val => {
+    const bar = document.createElement('div');
+    bar.className = 'dna-bar';
+    bar.style.height = (val / 10) * 100 + '%';
+    bar.style.opacity = (val / 10);
+    container.appendChild(bar);
+  });
 }
 
 function renderNotesGrid(notes) {
-    const topicsCol = document.getElementById('col-topics');
-    const conceptsCol = document.getElementById('col-concepts');
-    if (topicsCol && notes?.topics) {
-        topicsCol.innerHTML = '<div class="notes-col-header">TOPICS & KEY TAKEAWAYS</div>';
-        notes.topics.forEach(t => { 
-            const d = document.createElement('div'); d.className='notes-item'; 
-            d.innerHTML=`<strong>→ ${t}</strong>`; topicsCol.appendChild(d); 
-        });
-        if(notes.important) notes.important.forEach(i => {
-            const d = document.createElement('div'); d.className='notes-item';
-            d.textContent = i; topicsCol.appendChild(d);
-        });
-    }
-    if (conceptsCol && notes?.concepts) {
-        conceptsCol.innerHTML = '<div class="notes-col-header">TECHNICAL CONCEPTS</div>';
-        notes.concepts.forEach(c => {
-            const d = document.createElement('div'); d.className='notes-item';
-            d.innerHTML = `<div class="concept-header"><strong>${c.term || ''}</strong></div><div style="font-size:13px; color:var(--text-secondary)">${c.explanation || ''}</div>`;
-            conceptsCol.appendChild(d);
-        });
-    }
+  const topicsCol = document.getElementById('col-topics');
+  const conceptsCol = document.getElementById('col-concepts');
+  if (topicsCol && notes?.topics) {
+    topicsCol.innerHTML = '<div class="notes-col-header">TOPICS & KEY TAKEAWAYS</div>';
+    notes.topics.forEach(t => {
+      const d = document.createElement('div'); d.className = 'notes-item';
+      d.innerHTML = `<strong>→ ${t}</strong>`; topicsCol.appendChild(d);
+    });
+    if (notes.important) notes.important.forEach(i => {
+      const d = document.createElement('div'); d.className = 'notes-item';
+      d.textContent = i; topicsCol.appendChild(d);
+    });
+  }
+  if (conceptsCol && notes?.concepts) {
+    conceptsCol.innerHTML = '<div class="notes-col-header">TECHNICAL CONCEPTS</div>';
+    notes.concepts.forEach(c => {
+      const d = document.createElement('div'); d.className = 'notes-item';
+      d.innerHTML = `<div class="concept-header"><strong>${c.term || ''}</strong></div><div style="font-size:13px; color:var(--text-secondary)">${c.explanation || ''}</div>`;
+      conceptsCol.appendChild(d);
+    });
+  }
 }
 
 let graphAnimationId = null;
 function renderConceptMap(graphData) {
-    const container = document.getElementById('concept-map-container');
-    const canvas = document.getElementById('concept-canvas');
-    if (!container || !canvas || !graphData || !graphData.nodes) return;
-    
-    container.style.display = 'block';
-    const ctx = canvas.getContext('2d');
-    const dpr = window.devicePixelRatio || 1;
-    
-    // Resize function
-    function resize() {
-        const rect = canvas.parentElement.getBoundingClientRect();
-        canvas.width = rect.width * dpr;
-        canvas.height = 400 * dpr;
-        canvas.style.width = `${rect.width}px`;
-        canvas.style.height = `400px`;
-        ctx.scale(dpr, dpr);
-    }
-    resize();
-    window.addEventListener('resize', resize);
+  const container = document.getElementById('concept-map-container');
+  const canvas = document.getElementById('concept-canvas');
+  if (!container || !canvas || !graphData || !graphData.nodes) return;
 
-    const width = canvas.width / dpr;
-    const height = 400;
+  container.style.display = 'block';
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
 
-    const nodes = graphData.nodes.map((n, i) => ({
-        ...n,
-        x: Math.random() * width,
-        y: Math.random() * height,
-        vx: (Math.random() - 0.5) * 1,
-        vy: (Math.random() - 0.5) * 1,
-        radius: 35 + (n.label.length * 1.5)
-    }));
+  // Resize function
+  function resize() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = 400 * dpr;
+    canvas.style.width = `${rect.width}px`;
+    canvas.style.height = `400px`;
+    ctx.scale(dpr, dpr);
+  }
+  resize();
+  window.addEventListener('resize', resize);
 
-    const links = (graphData.links || []).map(l => ({
-        source: nodes.find(n => n.id === l.source),
-        target: nodes.find(n => n.id === l.target),
-        label: l.label
-    })).filter(l => l.source && l.target);
+  const width = canvas.width / dpr;
+  const height = 400;
 
-    if (graphAnimationId) cancelAnimationFrame(graphAnimationId);
+  const nodes = graphData.nodes.map((n, i) => ({
+    ...n,
+    x: Math.random() * width,
+    y: Math.random() * height,
+    vx: (Math.random() - 0.5) * 1,
+    vy: (Math.random() - 0.5) * 1,
+    radius: 35 + (n.label.length * 1.5)
+  }));
 
-    function animate() {
-        ctx.clearRect(0, 0, width, height);
-        
-        const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-        const accent2Color = getComputedStyle(document.documentElement).getPropertyValue('--accent-2').trim();
-        const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim();
-        const borderColor = getComputedStyle(document.documentElement).getPropertyValue('--border-strong').trim();
-        const paperColor = getComputedStyle(document.documentElement).getPropertyValue('--paper-2').trim();
+  const links = (graphData.links || []).map(l => ({
+    source: nodes.find(n => n.id === l.source),
+    target: nodes.find(n => n.id === l.target),
+    label: l.label
+  })).filter(l => l.source && l.target);
 
-        // Update positions & Physics (simple drift + collision)
-        nodes.forEach(n => {
-            n.x += n.vx;
-            n.y += n.vy;
-            
-            // Boundary bounce
-            if (n.x < n.radius) { n.x = n.radius; n.vx *= -0.8; }
-            if (n.x > width - n.radius) { n.x = width - n.radius; n.vx *= -0.8; }
-            if (n.y < n.radius) { n.y = n.radius; n.vy *= -0.8; }
-            if (n.y > height - n.radius) { n.y = height - n.radius; n.vy *= -0.8; }
-            
-            // Subtle pulse
-            n.pulse = Math.sin(Date.now() / 800) * 3;
-        });
+  if (graphAnimationId) cancelAnimationFrame(graphAnimationId);
 
-        // Draw Links
-        ctx.beginPath();
-        ctx.strokeStyle = borderColor;
-        ctx.setLineDash([5, 5]);
-        ctx.lineWidth = 1;
-        links.forEach(l => {
-            ctx.moveTo(l.source.x, l.source.y);
-            ctx.lineTo(l.target.x, l.target.y);
-        });
-        ctx.stroke();
-        ctx.setLineDash([]);
+  function animate() {
+    ctx.clearRect(0, 0, width, height);
 
-        // Draw Nodes
-        nodes.forEach(n => {
-            // Shadow
-            ctx.shadowColor = 'rgba(0,0,0,0.05)';
-            ctx.shadowBlur = 10;
-            
-            ctx.beginPath();
-            ctx.arc(n.x, n.y, n.radius + n.pulse, 0, Math.PI * 2);
-            ctx.fillStyle = paperColor;
-            ctx.fill();
-            
-            ctx.shadowBlur = 0;
-            ctx.strokeStyle = accentColor;
-            ctx.lineWidth = 1.5;
-            ctx.stroke();
+    const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+    const accent2Color = getComputedStyle(document.documentElement).getPropertyValue('--accent-2').trim();
+    const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim();
+    const borderColor = getComputedStyle(document.documentElement).getPropertyValue('--border-strong').trim();
+    const paperColor = getComputedStyle(document.documentElement).getPropertyValue('--paper-2').trim();
 
-            // Inner circle
-            ctx.beginPath();
-            ctx.arc(n.x, n.y, (n.radius + n.pulse) * 0.85, 0, Math.PI * 2);
-            ctx.strokeStyle = borderColor;
-            ctx.lineWidth = 0.5;
-            ctx.stroke();
+    // Update positions & Physics (simple drift + collision)
+    nodes.forEach(n => {
+      n.x += n.vx;
+      n.y += n.vy;
 
-            ctx.fillStyle = textColor;
-            ctx.font = `italic 600 11px "Playfair Display"`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            
-            // Wrap text if too long
-            const words = n.label.split(' ');
-            if (words.length > 2) {
-                ctx.fillText(words.slice(0, 2).join(' '), n.x, n.y - 6);
-                ctx.fillText(words.slice(2).join(' '), n.x, n.y + 6);
-            } else {
-                ctx.fillText(n.label, n.x, n.y);
-            }
-        });
+      // Boundary bounce
+      if (n.x < n.radius) { n.x = n.radius; n.vx *= -0.8; }
+      if (n.x > width - n.radius) { n.x = width - n.radius; n.vx *= -0.8; }
+      if (n.y < n.radius) { n.y = n.radius; n.vy *= -0.8; }
+      if (n.y > height - n.radius) { n.y = height - n.radius; n.vy *= -0.8; }
 
-        graphAnimationId = requestAnimationFrame(animate);
-    }
-    animate();
+      // Subtle pulse
+      n.pulse = Math.sin(Date.now() / 800) * 3;
+    });
+
+    // Draw Links
+    ctx.beginPath();
+    ctx.strokeStyle = borderColor;
+    ctx.setLineDash([5, 5]);
+    ctx.lineWidth = 1;
+    links.forEach(l => {
+      ctx.moveTo(l.source.x, l.source.y);
+      ctx.lineTo(l.target.x, l.target.y);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Draw Nodes
+    nodes.forEach(n => {
+      // Shadow
+      ctx.shadowColor = 'rgba(0,0,0,0.05)';
+      ctx.shadowBlur = 10;
+
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.radius + n.pulse, 0, Math.PI * 2);
+      ctx.fillStyle = paperColor;
+      ctx.fill();
+
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = accentColor;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Inner circle
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, (n.radius + n.pulse) * 0.85, 0, Math.PI * 2);
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+
+      ctx.fillStyle = textColor;
+      ctx.font = `italic 600 11px "Playfair Display"`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // Wrap text if too long
+      const words = n.label.split(' ');
+      if (words.length > 2) {
+        ctx.fillText(words.slice(0, 2).join(' '), n.x, n.y - 6);
+        ctx.fillText(words.slice(2).join(' '), n.x, n.y + 6);
+      } else {
+        ctx.fillText(n.label, n.x, n.y);
+      }
+    });
+
+    graphAnimationId = requestAnimationFrame(animate);
+  }
+  animate();
 }
 
 function renderFlashcards(cards) {
-    const container = document.getElementById('flashcards-grid');
-    if (!container || !cards) return;
-    container.innerHTML = '';
-    cards.forEach(card => {
-        const div = document.createElement('div');
-        div.className = 'flashcard';
-        div.innerHTML = `<div class="flashcard-inner"><div class="flashcard-front"><div class="fc-q-prefix">Q:</div><div class="fc-text">${card?.q || ''}</div></div><div class="flashcard-back"><div class="fc-a-prefix">A:</div><div class="fc-text">${card?.a || ''}</div></div></div>`;
-        div.addEventListener('click', () => div.classList.toggle('flipped'));
-        container.appendChild(div);
-    });
+  const container = document.getElementById('flashcards-grid');
+  if (!container || !cards) return;
+  container.innerHTML = '';
+  cards.forEach(card => {
+    const div = document.createElement('div');
+    div.className = 'flashcard';
+    div.innerHTML = `<div class="flashcard-inner"><div class="flashcard-front"><div class="fc-q-prefix">Q:</div><div class="fc-text">${card?.q || ''}</div></div><div class="flashcard-back"><div class="fc-a-prefix">A:</div><div class="fc-text">${card?.a || ''}</div></div></div>`;
+    div.addEventListener('click', () => div.classList.toggle('flipped'));
+    container.appendChild(div);
+  });
 }
 
 function downloadFullReport() {
-    if(!currentNotes || !currentTranscript) return;
-    let text = `DELECTURED FULL REPORT\n========================\n\n`;
-    text += `SUMMARY:\n${currentNotes.notes?.summary || ''}\n\n`;
-    text += `TECHNICAL CONCEPTS:\n`;
-    currentNotes.notes?.concepts?.forEach(c => { text += `- ${c.term}: ${c.explanation}\n`; });
-    text += `\nFULL TRANSCRIPTION:\n${currentTranscript}`;
-    const blob = new Blob([text], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = 'DeLectured_Report.txt'; a.click();
+  if (!currentNotes || !currentTranscript) return;
+  let text = `DELECTURED FULL REPORT\n========================\n\n`;
+  text += `SUMMARY:\n${currentNotes.notes?.summary || ''}\n\n`;
+  text += `TECHNICAL CONCEPTS:\n`;
+  currentNotes.notes?.concepts?.forEach(c => { text += `- ${c.term}: ${c.explanation}\n`; });
+  text += `\nFULL TRANSCRIPTION:\n${currentTranscript}`;
+  const blob = new Blob([text], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'DeLectured_Report.txt'; a.click();
 }
 
 document.addEventListener('DOMContentLoaded', init);
