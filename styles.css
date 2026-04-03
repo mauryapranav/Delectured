@@ -1,6 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&display=swap');
 
-:root {
+:root, .theme-clone[data-theme="light"] {
   --ink: #0A0A08;
   --paper: #F5F0E8;
   --paper-2: #EDE8DF;
@@ -21,7 +21,7 @@
   --font-serif: 'Playfair Display', serif;
 }
 
-[data-theme="dark"] {
+[data-theme="dark"], .theme-clone[data-theme="dark"] {
   --ink: #F5F0E8;
   --paper: #0A0A08;
   --paper-2: #141412;

@@ -99,28 +99,53 @@ let lastCorner = -1;
 function init() {
   updateApiStatus();
   
-  els.themeToggle.addEventListener('click', async () => {
+  els.themeToggle.addEventListener('click', () => {
     if (window.isThemeAnimating) return;
     window.isThemeAnimating = true;
 
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const root = document.documentElement;
+    const isDark = root.getAttribute('data-theme') === 'dark';
+    const currentTheme = isDark ? 'dark' : 'light';
     const nextTheme = isDark ? 'light' : 'dark';
     const isGoingDark = nextTheme === 'dark';
 
+    const layer = document.getElementById('theme-transition-layer');
+    const wrapper = document.getElementById('theme-clone-wrapper');
+    const content = document.getElementById('theme-clone-content');
     const path = document.getElementById('ink-mask-path');
-    if (!path || !document.startViewTransition) {
-        // Fallback for browsers without View Transitions API
-        document.documentElement.setAttribute('data-theme', nextTheme);
+
+    if (!layer || !wrapper || !content || !path) {
+        root.setAttribute('data-theme', nextTheme);
         window.isThemeAnimating = false;
         return;
     }
 
-    // Assign appropriate filter for personality
+    // 1. Lock the clone to the CURRENT theme
+    wrapper.setAttribute('data-theme', currentTheme);
+    
+    // 2. Clone the visual state perfectly
+    content.innerHTML = '';
+    Array.from(document.body.children).forEach(child => {
+        if (child.tagName !== 'SCRIPT' && child.id !== 'theme-transition-layer' && child.id !== 'ink-svg-defs') {
+            content.appendChild(child.cloneNode(true));
+        }
+    });
+
+    // 3. Align scroll position
+    content.style.transform = `translateY(${-window.scrollY}px)`;
+
+    // 4. Show the clone layer on top of everything
+    layer.style.visibility = 'visible';
+
+    // 5. Instantly swap the real DOM underneath to the NEW theme
+    root.setAttribute('data-theme', nextTheme);
+
+    // 6. Setup Animation Physics
     path.setAttribute('filter', isGoingDark ? 'url(#ink-bleed-dark)' : 'url(#ink-bleed-light)');
 
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const targetRadius = Math.hypot(w, h) + 150; // Extra buffer
+    const targetRadius = Math.hypot(w, h) + 150;
 
     const corners = [ {x: 0, y: 0}, {x: w, y: 0}, {x: 0, y: h}, {x: w, y: h} ];
     let cornerIdx;
@@ -131,57 +156,46 @@ function init() {
     const numPoints = 40;
     const jitters = Array.from({length: numPoints}, () => Math.random() * 0.4 + 0.8);
 
-    function animateMask() {
-        return new Promise(resolve => {
-            const startTime = performance.now();
-            const duration = isGoingDark ? 1400 : 1200; // Dissolve is slightly faster
+    const startTime = performance.now();
+    const duration = isGoingDark ? 1400 : 1200; // Dissolve is slightly faster
 
-            function easePour(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
-            function easeDissolve(t) { return 1 - Math.pow(1 - t, 3); }
+    function easePour(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+    function easeDissolve(t) { return 1 - Math.pow(1 - t, 3); }
 
-            function step(time) {
-                let p = (time - startTime) / duration;
-                if (p > 1) p = 1;
-                let ep = isGoingDark ? easePour(p) : easeDissolve(p);
-                
-                let currentRadius = ep * targetRadius;
-                if (currentRadius < 0.1) currentRadius = 0.1;
+    function step(time) {
+        let p = (time - startTime) / duration;
+        if (p > 1) p = 1;
+        let ep = isGoingDark ? easePour(p) : easeDissolve(p);
+        
+        let currentRadius = ep * targetRadius;
+        if (currentRadius < 0.1) currentRadius = 0.1;
 
-                let polygon = [];
-                for (let i = 0; i < numPoints; i++) {
-                    let angle = (i / numPoints) * Math.PI * 2;
-                    let dynamicJitter = jitters[i] + Math.sin(p * Math.PI * 10 + i * 2) * (0.15 * p); 
-                    let r = currentRadius * dynamicJitter;
-                    let px = corner.x + Math.cos(angle) * r;
-                    let py = corner.y + Math.sin(angle) * r;
-                    polygon.push(`${px},${py}`);
-                }
-                
-                path.setAttribute('d', `M ${polygon[0]} L ${polygon.slice(1).join(' L ')} Z`);
-                
-                if (p < 1) {
-                    requestAnimationFrame(step);
-                } else {
-                    path.setAttribute('d', ''); // Clear path when done
-                    resolve();
-                }
-            }
+        let polygon = [];
+        for (let i = 0; i < numPoints; i++) {
+            let angle = (i / numPoints) * Math.PI * 2;
+            // The jitter ensures the edge remains ragged and organic
+            let dynamicJitter = jitters[i] + Math.sin(p * Math.PI * 10 + i * 2) * (0.15 * p); 
+            let r = currentRadius * dynamicJitter;
+            let px = corner.x + Math.cos(angle) * r;
+            let py = corner.y + Math.sin(angle) * r;
+            polygon.push(`${px},${py}`);
+        }
+        
+        // By drawing a black path inside the mask, we cut a transparent hole in the clone,
+        // revealing the new theme underneath exactly where the ink spreads.
+        path.setAttribute('d', `M ${polygon[0]} L ${polygon.slice(1).join(' L ')} Z`);
+        
+        if (p < 1) {
             requestAnimationFrame(step);
-        });
-    }
-
-    document.documentElement.classList.add('theme-transitioning');
-    
-    const transition = document.startViewTransition(() => {
-        document.documentElement.setAttribute('data-theme', nextTheme);
-    });
-    
-    transition.ready.then(() => {
-        animateMask().then(() => {
-            document.documentElement.classList.remove('theme-transitioning');
+        } else {
+            // Cleanup
+            path.setAttribute('d', '');
+            layer.style.visibility = 'hidden';
+            content.innerHTML = ''; // free memory
             window.isThemeAnimating = false;
-        });
-    });
+        }
+    }
+    requestAnimationFrame(step);
   });
   els.apiToggle.addEventListener('click', (e) => {
     e.preventDefault();
