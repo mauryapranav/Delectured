@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <div id="ink-spread"></div>
     <!-- 1. Top info strip -->
     <div class="top-strip fade-up">
         <span>DELECTURED v1.6.2 · WHISPER-TURBO · LLAMA-3.3-70B</span>
@@ -59,7 +60,7 @@
                     </tr>
                     <tr>
                         <td>Flat bullet points</td>
-                        <td>Visual Mermaid.js Concept Mindmaps</td>
+                        <td>Visual Concept Mindmaps</td>
                     </tr>
                 </table>
 
@@ -101,7 +102,7 @@
                             <span class="upload-tag">WAV</span>
                             <span class="upload-tag">MP4</span>
                             <span class="upload-tag">AAC</span>
-                            <span class="upload-tag" style="border:none; background:transparent;">MAX 1GB</span>
+                            <span class="upload-tag" style="background: var(--accent); color: white; border-color: var(--accent);">MAX 1GB</span>
                         </div>
                     </div>
                 </div>
@@ -195,7 +196,10 @@
         <div class="result-card" id="concept-map-container" style="display:none;">
             <!-- Concept Map -->
             <div class="label" style="margin-bottom: 2rem;">CONCEPT MAP VISUALIZATION</div>
-            <div id="concept-map" class="mermaid" style="display: flex; justify-content: center; background: white; padding: 2rem; border-radius: 4px; border: 1px solid var(--border);"></div>
+            <div class="concept-graph-container">
+                <canvas id="concept-canvas"></canvas>
+                <div style="position: absolute; bottom: 1rem; right: 1rem; font-family: var(--font-mono); font-size: 9px; color: var(--text-tertiary);">Interactive • Animated</div>
+            </div>
         </div>
 
         <div class="result-card" id="exam-signals-container" style="display:none;">
@@ -271,10 +275,6 @@
         </div>
     </footer>
 
-    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-    <script>
-        mermaid.initialize({ startOnLoad: false, theme: 'base', securityLevel: 'loose', themeVariables: { primaryColor: '#F5F0E8', primaryTextColor: '#0A0A08', primaryBorderColor: '#C8402A', lineColor: '#C8402A' } });
-    </script>
     <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
     <script src="app.js"></script>
 </body>

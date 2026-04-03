@@ -99,7 +99,33 @@ function init() {
   updateApiStatus();
   els.themeToggle.addEventListener('click', () => {
     const isDark = document.body.parentElement.getAttribute('data-theme') === 'dark';
-    document.body.parentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+    const nextTheme = isDark ? 'light' : 'dark';
+    
+    const corners = [
+      {x: '0%', y: '0%'},
+      {x: '100%', y: '0%'},
+      {x: '0%', y: '100%'},
+      {x: '100%', y: '100%'}
+    ];
+    const corner = corners[Math.floor(Math.random() * corners.length)];
+    const ink = document.getElementById('ink-spread');
+    
+    if (ink) {
+      ink.style.setProperty('--spread-x', corner.x);
+      ink.style.setProperty('--spread-y', corner.y);
+      ink.classList.remove('active', 'fade-out');
+      void ink.offsetWidth;
+      ink.classList.add('active');
+      
+      setTimeout(() => {
+        document.body.parentElement.setAttribute('data-theme', nextTheme);
+        setTimeout(() => {
+          ink.classList.add('fade-out');
+        }, 300);
+      }, 700);
+    } else {
+      document.body.parentElement.setAttribute('data-theme', nextTheme);
+    }
   });
   els.apiToggle.addEventListener('click', (e) => {
     e.preventDefault();
@@ -240,7 +266,13 @@ async function handleFile(file) {
     try { renderDNA(notesJson.lecture_dna || Array(20).fill(5)); } catch(e) { console.warn("DNA error", e); }
     try { renderNotesGrid(notesJson.notes); } catch(e) { console.warn("Grid error", e); }
     try { renderFlashcards(notesJson.flashcards); } catch(e) { console.warn("Flash error", e); }
-    try { if(notesJson.concept_map) renderConceptMap(notesJson.concept_map); } catch(e) { console.warn("Map error", e); }
+    try { 
+        if(notesJson.concept_graph) renderConceptMap(notesJson.concept_graph);
+        else if(notesJson.concept_map) {
+            // Simple fallback if old format returned
+            renderConceptMap({nodes:[{id:'n1', label:'Concept Map Rendered'}], links:[]});
+        }
+    } catch(e) { console.warn("Map error", e); }
     
   } catch (error) {
     logTerminal(`[FATAL ERROR] ${error.message}`);
@@ -289,7 +321,7 @@ async function generateNotesStage2(transcript, analysis) {
     TASK: Transform this ${wordCount}-word transcript into an EXHAUSTIVE, high-density study guide.
     1. SUMMARY: Minimum 500 words technical explaining the core thesis.
     2. CONCEPTS: Extract 20 concepts with deep definitions.
-    3. CONCEPT MAP: Mermaid.js graph TD code.
+    3. CONCEPT GRAPH: A JSON object with "nodes" (id, label) and "links" (source, target, label).
     Return ONLY valid JSON:
     {
       "notes": {
@@ -299,7 +331,10 @@ async function generateNotesStage2(transcript, analysis) {
         "important": ["Insight 1", "..."],
         "structure_summary": { "intro": "...", "core": "...", "examples": "...", "conclusion": "..." }
       },
-      "concept_map": "graph TD\\n  A((Concept)) -- defines --> B((Concept))\\n...",
+      "concept_graph": {
+        "nodes": [{"id": "n1", "label": "Concept A"}, ...],
+        "links": [{"source": "n1", "target": "n2", "label": "defines"}]
+      },
       "score": { "clarity": 85, "density": 95, "pace": 70, "concept_count": 20, "revision_mins": 60 },
       "flashcards": [{ "q": "...", "a": "..." }],
       "lecture_dna": [20 integers]
@@ -317,21 +352,37 @@ async function generateNotesStage2(transcript, analysis) {
 async function handleChat(msg) {
     if (!currentNotes) return;
     const chatHistoryEl = document.getElementById('chat-history');
+    
     const userEl = document.createElement('div');
-    userEl.className = 'chat-msg chat-user'; userEl.textContent = msg;
+    userEl.className = 'chat-msg chat-user'; 
+    userEl.setAttribute('data-label', 'QUESTION');
+    userEl.textContent = msg;
     chatHistoryEl.appendChild(userEl);
+    
     const aiEl = document.createElement('div');
-    aiEl.className = 'chat-msg chat-ai'; aiEl.textContent = '...';
+    aiEl.className = 'chat-msg chat-ai'; 
+    aiEl.setAttribute('data-label', 'DELECTURED INSIGHT');
+    aiEl.innerHTML = '<div class="chat-ai-content"><p>...</p></div>';
     chatHistoryEl.appendChild(aiEl);
+    
+    const contentEl = aiEl.querySelector('.chat-ai-content');
+    let fullText = "";
+
     try {
         const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: "llama-3.1-8b-instant", messages: [{ role: 'system', content: `Context: ${JSON.stringify(currentNotes.notes)}` }, { role: 'user', content: msg }], stream: true })
+            body: JSON.stringify({ 
+                model: "llama-3.1-8b-instant", 
+                messages: [
+                    { role: 'system', content: `You are a professional academic assistant. Format your response with clear structure. Use **bold** for key terms. Break long answers into paragraphs. Context: ${JSON.stringify(currentNotes.notes)}` }, 
+                    { role: 'user', content: msg }
+                ], 
+                stream: true 
+            })
         });
         const reader = res.body.getReader();
         const decoder = new TextDecoder("utf-8");
-        aiEl.textContent = "";
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
@@ -341,12 +392,36 @@ async function handleChat(msg) {
                 if (line.startsWith("data: ") && line !== "data: [DONE]") {
                     try {
                         const token = JSON.parse(line.substring(6)).choices[0]?.delta?.content;
-                        if (token) aiEl.textContent += token;
+                        if (token) {
+                            fullText += token;
+                            contentEl.innerHTML = formatAIChat(fullText);
+                        }
                     } catch (e) {}
                 }
             }
         }
-    } catch(e) { aiEl.textContent = `Error: ${e.message}`; }
+    } catch(e) { contentEl.textContent = `Error: ${e.message}`; }
+    chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
+}
+
+function formatAIChat(text) {
+    let formatted = text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\n\n/g, '</p><p>')
+        .replace(/\n/g, '<br>')
+        .replace(/^\* (.*)/gm, '<li>$1</li>');
+    
+    if (formatted.includes('<li>')) {
+        const parts = formatted.split(/<li>/);
+        let result = parts[0];
+        if (!result.includes('<ul>')) result += '<ul>';
+        for(let i=1; i<parts.length; i++) {
+            result += '<li>' + parts[i];
+        }
+        result += '</ul>';
+        formatted = result;
+    }
+    return `<p>${formatted}</p>`;
 }
 
 function logTerminal(msg, update = false) {
@@ -414,14 +489,125 @@ function renderNotesGrid(notes) {
     }
 }
 
-function renderConceptMap(mermaidCode) {
+let graphAnimationId = null;
+function renderConceptMap(graphData) {
     const container = document.getElementById('concept-map-container');
-    const target = document.getElementById('concept-map');
-    if (!container || !target || !mermaidCode) return;
+    const canvas = document.getElementById('concept-canvas');
+    if (!container || !canvas || !graphData || !graphData.nodes) return;
+    
     container.style.display = 'block';
-    target.innerHTML = mermaidCode;
-    target.removeAttribute('data-processed');
-    setTimeout(() => { if (typeof mermaid !== 'undefined') mermaid.contentLoaded(); }, 200);
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    
+    // Resize function
+    function resize() {
+        const rect = canvas.parentElement.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = 400 * dpr;
+        canvas.style.width = `${rect.width}px`;
+        canvas.style.height = `400px`;
+        ctx.scale(dpr, dpr);
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    const width = canvas.width / dpr;
+    const height = 400;
+
+    const nodes = graphData.nodes.map((n, i) => ({
+        ...n,
+        x: Math.random() * width,
+        y: Math.random() * height,
+        vx: (Math.random() - 0.5) * 1,
+        vy: (Math.random() - 0.5) * 1,
+        radius: 35 + (n.label.length * 1.5)
+    }));
+
+    const links = (graphData.links || []).map(l => ({
+        source: nodes.find(n => n.id === l.source),
+        target: nodes.find(n => n.id === l.target),
+        label: l.label
+    })).filter(l => l.source && l.target);
+
+    if (graphAnimationId) cancelAnimationFrame(graphAnimationId);
+
+    function animate() {
+        ctx.clearRect(0, 0, width, height);
+        
+        const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+        const accent2Color = getComputedStyle(document.documentElement).getPropertyValue('--accent-2').trim();
+        const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim();
+        const borderColor = getComputedStyle(document.documentElement).getPropertyValue('--border-strong').trim();
+        const paperColor = getComputedStyle(document.documentElement).getPropertyValue('--paper-2').trim();
+
+        // Update positions & Physics (simple drift + collision)
+        nodes.forEach(n => {
+            n.x += n.vx;
+            n.y += n.vy;
+            
+            // Boundary bounce
+            if (n.x < n.radius) { n.x = n.radius; n.vx *= -0.8; }
+            if (n.x > width - n.radius) { n.x = width - n.radius; n.vx *= -0.8; }
+            if (n.y < n.radius) { n.y = n.radius; n.vy *= -0.8; }
+            if (n.y > height - n.radius) { n.y = height - n.radius; n.vy *= -0.8; }
+            
+            // Subtle pulse
+            n.pulse = Math.sin(Date.now() / 800) * 3;
+        });
+
+        // Draw Links
+        ctx.beginPath();
+        ctx.strokeStyle = borderColor;
+        ctx.setLineDash([5, 5]);
+        ctx.lineWidth = 1;
+        links.forEach(l => {
+            ctx.moveTo(l.source.x, l.source.y);
+            ctx.lineTo(l.target.x, l.target.y);
+        });
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Draw Nodes
+        nodes.forEach(n => {
+            // Shadow
+            ctx.shadowColor = 'rgba(0,0,0,0.05)';
+            ctx.shadowBlur = 10;
+            
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, n.radius + n.pulse, 0, Math.PI * 2);
+            ctx.fillStyle = paperColor;
+            ctx.fill();
+            
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = accentColor;
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            // Inner circle
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, (n.radius + n.pulse) * 0.85, 0, Math.PI * 2);
+            ctx.strokeStyle = borderColor;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+
+            ctx.fillStyle = textColor;
+            ctx.font = `italic 600 11px "Playfair Display"`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // Wrap text if too long
+            const words = n.label.split(' ');
+            if (words.length > 2) {
+                ctx.fillText(words.slice(0, 2).join(' '), n.x, n.y - 6);
+                ctx.fillText(words.slice(2).join(' '), n.x, n.y + 6);
+            } else {
+                ctx.fillText(n.label, n.x, n.y);
+            }
+        });
+
+        graphAnimationId = requestAnimationFrame(animate);
+    }
+    animate();
 }
 
 function renderFlashcards(cards) {
