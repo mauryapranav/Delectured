@@ -100,63 +100,87 @@ function init() {
   updateApiStatus();
   
   els.themeToggle.addEventListener('click', () => {
+    const overlay = document.getElementById('ink-spread-overlay');
+    const fill = document.getElementById('ink-spread-fill');
+    if (!overlay || !fill || overlay.classList.contains('active')) return;
+
     const isDark = document.body.parentElement.getAttribute('data-theme') === 'dark';
     const nextTheme = isDark ? 'light' : 'dark';
-    const overlay = document.getElementById('ink-spread-overlay');
-    const path = document.getElementById('ink-spread-path');
     
-    if (!overlay || !path) {
-        document.body.parentElement.setAttribute('data-theme', nextTheme);
-        return;
-    }
+    const rect = overlay.getBoundingClientRect();
+    const w = rect.width || window.innerWidth;
+    const h = rect.height || window.innerHeight;
 
-    const corners = [
-      {x: 0, y: 0, name: 'top-left'},
-      {x: 100, y: 0, name: 'top-right'},
-      {x: 0, y: 100, name: 'bottom-left'},
-      {x: 100, y: 100, name: 'bottom-right'}
-    ];
-    
+    const corners = [ {x: 0, y: 0}, {x: w, y: 0}, {x: 0, y: h}, {x: w, y: h} ];
     let cornerIdx;
     do { cornerIdx = Math.floor(Math.random() * corners.length); } while (cornerIdx === lastCorner);
     lastCorner = cornerIdx;
     const corner = corners[cornerIdx];
 
-    // Material Physics: Organic blob path
-    // We use a simplified organic shape that scales from the corner
-    const organicPath = "M-20,-20 Q50,-40 120,-20 Q140,50 120,120 Q50,140 -20,120 Q-40,50 -20,-20 Z";
-    path.setAttribute('d', organicPath);
-    
-    // Set origin to the chosen corner
-    path.style.transformOrigin = `${corner.x}% ${corner.y}%`;
-    path.style.transform = 'scale(0)';
-    
-    // Color logic: Ink color for Light->Dark, Paper color for Dark->Light
+    // The overlay fill color must match the DESTINATION theme's background.
+    // If current isDark == true, destination is light, so destination paper is #F5F0E8.
+    // In dark mode, --ink is #F5F0E8. So the current --ink matches destination --paper.
     const inkColor = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim();
-    const paperColor = getComputedStyle(document.documentElement).getPropertyValue('--paper').trim();
-    path.style.fill = isDark ? paperColor : inkColor;
+    fill.style.backgroundColor = inkColor;
 
-    // Easing selection based on direction
-    const easing = isDark ? 'var(--dissolve-ease)' : 'var(--ink-ease)';
-    path.style.transition = `transform 1.4s ${easing}`;
-
+    // Reset overlay visibility
+    overlay.style.transition = 'none';
+    overlay.style.opacity = '1';
     overlay.classList.add('active');
+
+    // Animation physics setup
+    const numPoints = 32;
+    const duration = isDark ? 1000 : 1300; // dissolve is slightly faster
+    const targetRadius = Math.hypot(w, h) + 150; // Ensure full coverage
     
-    // Trigger animation
-    requestAnimationFrame(() => {
-        path.style.transform = 'scale(2.5)';
-    });
+    // Generate organic jitters for the polygon points
+    const jitters = [];
+    for (let i = 0; i < numPoints; i++) {
+        jitters.push(Math.random() * 0.4 + 0.8); // 0.8 to 1.2
+    }
 
-    // Theme swap mid-animation for seamless transition
-    setTimeout(() => {
-        document.body.parentElement.setAttribute('data-theme', nextTheme);
-    }, 700);
+    const startTime = performance.now();
+    function easeInk(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+    function easeDissolve(t) { return 1 - Math.pow(1 - t, 4); }
 
-    // Cleanup
-    setTimeout(() => {
-        overlay.classList.remove('active');
-        path.style.transform = 'scale(0)';
-    }, 1500);
+    function step(time) {
+        let p = (time - startTime) / duration;
+        if (p > 1) p = 1;
+        let ep = isDark ? easeDissolve(p) : easeInk(p);
+
+        let currentRadius = ep * targetRadius;
+        if (currentRadius < 1) currentRadius = 1;
+        
+        let polygon = [];
+        for (let i = 0; i < numPoints; i++) {
+            let angle = (i / numPoints) * Math.PI * 2;
+            let dynamicJitter = jitters[i] + Math.sin(p * Math.PI * 6 + i) * 0.1;
+            let r = currentRadius * dynamicJitter;
+            
+            let px = corner.x + Math.cos(angle) * r;
+            let py = corner.y + Math.sin(angle) * r;
+            polygon.push(`${px}px ${py}px`);
+        }
+        
+        fill.style.clipPath = `polygon(${polygon.join(', ')})`;
+        
+        if (p < 1) {
+            requestAnimationFrame(step);
+        } else {
+            // Animation complete. Overlay fully covers screen.
+            document.body.parentElement.setAttribute('data-theme', nextTheme);
+            
+            // Fade out the overlay to gracefully reveal the new theme underneath
+            overlay.style.transition = `opacity ${isDark ? 600 : 800}ms ease`;
+            overlay.style.opacity = '0';
+            
+            setTimeout(() => {
+                overlay.classList.remove('active');
+                fill.style.clipPath = 'none';
+            }, 800);
+        }
+    }
+    requestAnimationFrame(step);
   });
   els.apiToggle.addEventListener('click', (e) => {
     e.preventDefault();

@@ -207,21 +207,18 @@ nav { display: flex; justify-content: space-between; align-items: center; paddin
   width: 100vw; height: 100vh;
   z-index: 10000;
   pointer-events: none;
-  opacity: 0;
   visibility: hidden;
-  transition: opacity 0.4s ease;
+  filter: url(#ink-bleed-filter);
+  /* Opacity is controlled manually by JS for the fade-out reveal */
 }
 
 #ink-spread-overlay.active {
-  opacity: 1;
   visibility: visible;
 }
 
-#ink-spread-path {
-  fill: var(--ink);
-  filter: url(#ink-bleed-filter);
-  transform-origin: center;
-  transition: transform 1.2s var(--ink-ease), d 1.2s var(--ink-ease);
+#ink-spread-fill {
+  width: 100%; height: 100%;
+  /* background and clip-path animated by JS */
 }
 
 :root {
