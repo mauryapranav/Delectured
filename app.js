@@ -99,17 +99,28 @@ let lastCorner = -1;
 function init() {
   updateApiStatus();
   
-  els.themeToggle.addEventListener('click', () => {
-    const overlay = document.getElementById('ink-spread-overlay');
-    const fill = document.getElementById('ink-spread-fill');
-    if (!overlay || !fill || overlay.classList.contains('active')) return;
+  els.themeToggle.addEventListener('click', async () => {
+    if (window.isThemeAnimating) return;
+    window.isThemeAnimating = true;
 
-    const isDark = document.body.parentElement.getAttribute('data-theme') === 'dark';
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const nextTheme = isDark ? 'light' : 'dark';
-    
-    const rect = overlay.getBoundingClientRect();
-    const w = rect.width || window.innerWidth;
-    const h = rect.height || window.innerHeight;
+    const isGoingDark = nextTheme === 'dark';
+
+    const path = document.getElementById('ink-mask-path');
+    if (!path || !document.startViewTransition) {
+        // Fallback for browsers without View Transitions API
+        document.documentElement.setAttribute('data-theme', nextTheme);
+        window.isThemeAnimating = false;
+        return;
+    }
+
+    // Assign appropriate filter for personality
+    path.setAttribute('filter', isGoingDark ? 'url(#ink-bleed-dark)' : 'url(#ink-bleed-light)');
+
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const targetRadius = Math.hypot(w, h) + 150; // Extra buffer
 
     const corners = [ {x: 0, y: 0}, {x: w, y: 0}, {x: 0, y: h}, {x: w, y: h} ];
     let cornerIdx;
@@ -117,70 +128,60 @@ function init() {
     lastCorner = cornerIdx;
     const corner = corners[cornerIdx];
 
-    // The overlay fill color must match the DESTINATION theme's background.
-    // If current isDark == true, destination is light, so destination paper is #F5F0E8.
-    // In dark mode, --ink is #F5F0E8. So the current --ink matches destination --paper.
-    const inkColor = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim();
-    fill.style.backgroundColor = inkColor;
+    const numPoints = 40;
+    const jitters = Array.from({length: numPoints}, () => Math.random() * 0.4 + 0.8);
 
-    // Reset overlay visibility
-    overlay.style.transition = 'none';
-    overlay.style.opacity = '1';
-    overlay.classList.add('active');
+    function animateMask() {
+        return new Promise(resolve => {
+            const startTime = performance.now();
+            const duration = isGoingDark ? 1400 : 1200; // Dissolve is slightly faster
 
-    // Animation physics setup
-    const numPoints = 32;
-    const duration = isDark ? 1000 : 1300; // dissolve is slightly faster
-    const targetRadius = Math.hypot(w, h) + 150; // Ensure full coverage
-    
-    // Generate organic jitters for the polygon points
-    const jitters = [];
-    for (let i = 0; i < numPoints; i++) {
-        jitters.push(Math.random() * 0.4 + 0.8); // 0.8 to 1.2
-    }
+            function easePour(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+            function easeDissolve(t) { return 1 - Math.pow(1 - t, 3); }
 
-    const startTime = performance.now();
-    function easeInk(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
-    function easeDissolve(t) { return 1 - Math.pow(1 - t, 4); }
+            function step(time) {
+                let p = (time - startTime) / duration;
+                if (p > 1) p = 1;
+                let ep = isGoingDark ? easePour(p) : easeDissolve(p);
+                
+                let currentRadius = ep * targetRadius;
+                if (currentRadius < 0.1) currentRadius = 0.1;
 
-    function step(time) {
-        let p = (time - startTime) / duration;
-        if (p > 1) p = 1;
-        let ep = isDark ? easeDissolve(p) : easeInk(p);
-
-        let currentRadius = ep * targetRadius;
-        if (currentRadius < 1) currentRadius = 1;
-        
-        let polygon = [];
-        for (let i = 0; i < numPoints; i++) {
-            let angle = (i / numPoints) * Math.PI * 2;
-            let dynamicJitter = jitters[i] + Math.sin(p * Math.PI * 6 + i) * 0.1;
-            let r = currentRadius * dynamicJitter;
-            
-            let px = corner.x + Math.cos(angle) * r;
-            let py = corner.y + Math.sin(angle) * r;
-            polygon.push(`${px}px ${py}px`);
-        }
-        
-        fill.style.clipPath = `polygon(${polygon.join(', ')})`;
-        
-        if (p < 1) {
+                let polygon = [];
+                for (let i = 0; i < numPoints; i++) {
+                    let angle = (i / numPoints) * Math.PI * 2;
+                    let dynamicJitter = jitters[i] + Math.sin(p * Math.PI * 10 + i * 2) * (0.15 * p); 
+                    let r = currentRadius * dynamicJitter;
+                    let px = corner.x + Math.cos(angle) * r;
+                    let py = corner.y + Math.sin(angle) * r;
+                    polygon.push(`${px},${py}`);
+                }
+                
+                path.setAttribute('d', `M ${polygon[0]} L ${polygon.slice(1).join(' L ')} Z`);
+                
+                if (p < 1) {
+                    requestAnimationFrame(step);
+                } else {
+                    path.setAttribute('d', ''); // Clear path when done
+                    resolve();
+                }
+            }
             requestAnimationFrame(step);
-        } else {
-            // Animation complete. Overlay fully covers screen.
-            document.body.parentElement.setAttribute('data-theme', nextTheme);
-            
-            // Fade out the overlay to gracefully reveal the new theme underneath
-            overlay.style.transition = `opacity ${isDark ? 600 : 800}ms ease`;
-            overlay.style.opacity = '0';
-            
-            setTimeout(() => {
-                overlay.classList.remove('active');
-                fill.style.clipPath = 'none';
-            }, 800);
-        }
+        });
     }
-    requestAnimationFrame(step);
+
+    document.documentElement.classList.add('theme-transitioning');
+    
+    const transition = document.startViewTransition(() => {
+        document.documentElement.setAttribute('data-theme', nextTheme);
+    });
+    
+    transition.ready.then(() => {
+        animateMask().then(() => {
+            document.documentElement.classList.remove('theme-transitioning');
+            window.isThemeAnimating = false;
+        });
+    });
   });
   els.apiToggle.addEventListener('click', (e) => {
     e.preventDefault();
