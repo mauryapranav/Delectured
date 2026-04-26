@@ -3,6 +3,7 @@
 **Every Lecture. Every Word. Structured.**
 
 DeLectured is a high-intelligence lecture structuring engine designed to turn raw academic audio into perfectly organized, domain-aware study materials. Unlike generic transcription tools, DeLectured understands the nuances of a classroom environment, including professor emphasis, subject-specific terminology, and the structural flow of a lecture.
+<img width="2502" height="1434" alt="image" src="https://github.com/user-attachments/assets/a7c230be-3818-432d-82e2-e2f51f619756" />
 
 ## The Two-Stage Intelligence Pipeline
 
