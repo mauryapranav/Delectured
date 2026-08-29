@@ -5,26 +5,43 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DeLectured | Every Lecture. Every Word. Structured.</title>
+    <meta name="description" content="Turn your lectures into structured study materials. AI-powered transcription, concept maps, flashcards, and notes.">
     <link rel="stylesheet" href="styles.css">
+    <!-- Supabase JS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- html2pdf for client-side PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 
 <body>
-    <!-- 1. Top info strip -->
-    <div class="top-strip fade-up">
-        <span>DELECTURED v1.6.2 · WHISPER-TURBO · LLAMA-3.3-70B</span>
-        <span id="api-status">API KEY: NOT SET</span>
+
+    <!-- =========================================
+         AUTH WALL — shown when not authenticated
+         auth.js controls visibility via onAuthStateChange
+         ========================================= -->
+    <div id="auth-wall" style="display:none;">
+        <div class="auth-card">
+            <div class="footer-logo">DeLectured</div>
+            <p>Turn your lectures into exhaustive study materials.<br>4 free lectures per month. No credit card needed.</p>
+            <button class="google-signin-btn" onclick="window.DeLecturedAuth.signInWithGoogle()">
+                Continue with Google
+            </button>
+            <p class="auth-note">Free &middot; 4 lectures/month &middot; No credit card</p>
+        </div>
     </div>
 
-    <!-- 2. API key panel -->
-    <div class="api-panel" id="api-panel">
-        <label class="label">Set Groq API Key (Stored locally)</label>
-        <div class="api-input-group">
-            <input type="password" id="api-input" class="api-input" placeholder="gsk_...">
-            <button class="btn" id="api-save">Save Key</button>
-        </div>
-        <div style="margin-top: 1rem; color: var(--text-tertiary);">Get a free key at <a
-                href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com</a></div>
+    <!-- =========================================
+         APP CONTENT — hidden until authenticated
+         ========================================= -->
+    <div id="app-content" style="display:none;">
+
+    <!-- 1. Top info strip -->
+    <div class="top-strip fade-up">
+        <span>DELECTURED v2.0.0 · WHISPER-TURBO · LLAMA-3.3-70B</span>
+        <span id="api-status">SERVER-SIDE API</span>
     </div>
+
+    <!-- 2. API key panel REMOVED in v2.0 — keys are now server-side -->
 
     <!-- 3. Nav -->
     <nav class="fade-up" style="animation-delay: 0.1s;">
@@ -34,9 +51,12 @@
             <a href="#how-it-works">How It Works</a>
             <a href="guide.html">Guide</a>
         </div>
-        <div class="nav-controls">
-            <button class="icon-btn" id="theme-toggle" aria-label="Toggle Dark Mode">◑</button>
-            <button class="btn" id="api-key-toggle">API Key</button>
+        <div class="nav-controls" style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+            <span id="usage-display" class="usage-badge"></span>
+            <span id="user-display"></span>
+            <button class="btn" onclick="window.DeLecturedAuth.openSidebar()">Past Lectures</button>
+            <button class="icon-btn" id="theme-toggle" aria-label="Toggle Dark Mode">&#9681;</button>
+            <button class="btn" onclick="window.DeLecturedAuth.signOut()" style="border-color:var(--accent); color:var(--accent);">Sign Out</button>
         </div>
     </nav>
 
@@ -49,14 +69,14 @@
                     Every Word.<br>
                     Structured.
                 </h1>
-                <p class="tagline">v1.6 Expert uses LLaMA 3.3 70B to transform raw audio into exhaustive study
+                <p class="tagline">v2.0 Expert uses LLaMA 3.3 70B to transform raw audio into exhaustive study
                     materials. Up to 1GB supported—get full technical depth, visual concept maps, and active recall sets
                     in minutes.</p>
 
                 <table class="comparison-table" style="max-width: 600px; margin-top: 2rem;">
                     <tr>
                         <th>Other AI (ChatGPT etc.)</th>
-                        <th>DeLectured Expert v1.6</th>
+                        <th>DeLectured Expert v2.0</th>
                     </tr>
                     <tr>
                         <td>Short, compressed summaries</td>
@@ -101,23 +121,64 @@
                 <p class="tagline" style="margin-bottom:2rem; font-size:1rem;">Supports files up to 1GB. Parallel
                     Whisper-Turbo engine engaged.</p>
 
-                <div class="upload-zone" id="upload-zone" style="margin: 0 0 2rem 0; width: 100%;">
-                    <div class="upload-num">01</div>
-                    <div class="upload-content">
-                        <div class="upload-instr">Drop lecture audio file here or click to browse</div>
-                        <div class="upload-tags">
-                            <span class="upload-tag">MP3</span>
-                            <span class="upload-tag">M4A</span>
-                            <span class="upload-tag">WAV</span>
-                            <span class="upload-tag">MP4</span>
-                            <span class="upload-tag">AAC</span>
-                            <span class="upload-tag"
-                                style="background: var(--accent); color: white; border-color: var(--accent);">MAX
-                                1GB</span>
+                <!-- Input mode toggle -->
+                <div class="input-mode-toggle" style="display:flex; gap:0.5rem; margin-bottom:1.5rem;">
+                    <button class="btn mode-btn active" id="mode-upload" data-mode="upload" style="flex:1;">Upload File</button>
+                    <button class="btn mode-btn" id="mode-record" data-mode="record" style="flex:1;">Record Live</button>
+                </div>
+
+                <!-- Upload mode -->
+                <div id="upload-mode" class="input-mode-panel">
+                    <div class="upload-zone" id="upload-zone" style="margin: 0 0 2rem 0; width: 100%;">
+                        <div class="upload-num">01</div>
+                        <div class="upload-content">
+                            <div class="upload-instr">Drop lecture audio file here or click to browse</div>
+                            <div class="upload-tags">
+                                <span class="upload-tag">MP3</span>
+                                <span class="upload-tag">M4A</span>
+                                <span class="upload-tag">WAV</span>
+                                <span class="upload-tag">MP4</span>
+                                <span class="upload-tag">AAC</span>
+                                <span class="upload-tag"
+                                    style="background: var(--accent); color: white; border-color: var(--accent);">MAX
+                                    1GB</span>
+                            </div>
+                        </div>
+                    </div>
+                    <input type="file" id="file-input" class="file-input" accept="audio/*,video/mp4">
+                </div>
+
+                <!-- Record mode -->
+                <div id="record-mode" class="input-mode-panel" style="display:none;">
+                    <div class="record-panel" id="record-panel">
+                        <div class="record-visualizer" id="record-visualizer">
+                            <canvas id="record-canvas"></canvas>
+                        </div>
+                        <div class="record-timer" id="record-timer">00:00:00</div>
+                        <div class="record-status" id="record-status">Ready to record</div>
+                        <div class="record-controls">
+                            <button class="btn record-btn" id="record-btn" aria-label="Start recording">
+                                <span class="record-icon">●</span>
+                                <span class="record-text">Start Recording</span>
+                            </button>
+                            <button class="btn" id="pause-btn" style="display:none;" aria-label="Pause recording">
+                                <span>⏸</span> Pause
+                            </button>
+                            <button class="btn" id="stop-btn" style="display:none;" aria-label="Stop recording">
+                                <span>■</span> Stop & Process
+                            </button>
+                            <button class="btn" id="discard-btn" style="display:none;" aria-label="Discard recording">
+                                Discard
+                            </button>
+                        </div>
+                        <div class="record-hint" style="margin-top:1rem; font-family:var(--font-mono); font-size:11px; color:var(--text-tertiary); text-align:center;">
+                            Records in 30-second chunks. Processes automatically when stopped.
                         </div>
                     </div>
                 </div>
-                <input type="file" id="file-input" class="file-input" accept="audio/*,video/mp4">
+
+                <!-- 6. Processing terminal -->
+                <div class="terminal" id="terminal">
 
                 <!-- 6. Processing terminal -->
                 <div class="terminal" id="terminal">
@@ -152,6 +213,15 @@
 
     <!-- 7. Results -->
     <section class="results container" id="results">
+
+        <!-- Session title (auto-saved; click to rename) -->
+        <div id="session-title-container" class="session-title-container" style="display:none;">
+            <div class="label" style="margin-bottom:0.75rem; color:var(--accent-2);">SESSION TITLE &mdash; CLICK TO EDIT</div>
+            <span id="session-title-display" class="session-title-display" onclick="window.enableTitleEdit()"></span>
+            <input id="session-title-input" class="session-title-input" style="display:none;"
+                onblur="window.saveTitleEdit()"
+                onkeydown="if(event.key==='Enter') this.blur();" />
+        </div>
 
         <div class="result-card">
             <!-- Stage 1 Badges -->
@@ -284,7 +354,8 @@
         <!-- Export -->
         <div style="margin-top: 2rem; display: flex; flex-wrap: wrap; gap: 1rem; padding-bottom: 4rem;">
             <button class="btn" id="btn-download" style="flex:1;">Download Full Report</button>
-            <button class="btn" id="btn-print" style="flex:1;">Print PDF</button>
+            <button class="btn" id="btn-print" style="flex:1;" onclick="window.printReport()">Print Report</button>
+            <button class="export-btn" onclick="window.exportToPDF()">Export as PDF</button>
             <button class="btn" id="btn-process-another"
                 style="flex:1; border-color:var(--accent); color:var(--accent);">PROCESS ANOTHER LECTURE</button>
         </div>
@@ -304,7 +375,28 @@
         </div>
     </footer>
 
+    </div><!-- /app-content -->
+
+    <!-- Sessions Sidebar Panel -->
+    <div id="sessions-panel" class="sessions-panel">
+        <div class="sessions-panel-header">
+            <span class="label">LIBRARY</span>
+            <button class="icon-btn" onclick="window.DeLecturedAuth.closeSidebar()" aria-label="Close">&#x2715;</button>
+        </div>
+        <div class="sidebar-tabs" style="display:flex; border-bottom:1px solid var(--border); background:var(--paper-3);">
+            <button class="sidebar-tab active" id="tab-sessions" onclick="window.DeLecturedAuth.setSidebarTab('sessions')" style="flex:1; padding:0.75rem; background:none; border:none; font-family:var(--font-mono); font-size:11px; text-transform:uppercase; cursor:pointer; color:var(--text-secondary); border-bottom:2px solid var(--accent);">Sessions</button>
+            <button class="sidebar-tab" id="tab-recordings" onclick="window.DeLecturedAuth.setSidebarTab('recordings')" style="flex:1; padding:0.75rem; background:none; border:none; font-family:var(--font-mono); font-size:11px; text-transform:uppercase; cursor:pointer; color:var(--text-tertiary); border-bottom:2px solid transparent;">Recordings</button>
+        </div>
+        <div id="sessions-content" class="sessions-list" style="display:block;">
+            <div class="session-empty">Loading...</div>
+        </div>
+        <div id="recordings-content" class="sessions-list" style="display:none;"></div>
+    </div>
+    <!-- Sidebar backdrop (click to close) -->
+    <div id="sessions-backdrop" class="sessions-backdrop" onclick="window.DeLecturedAuth.closeSidebar()"></div>
+
     <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
+    <script src="auth.js"></script>
     <script src="ink-transition.js"></script>
     <script src="app.js"></script>
 </body>

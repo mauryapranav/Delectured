@@ -23,7 +23,7 @@
 
     <!-- Top info strip -->
     <div class="top-strip">
-        <span>DELECTURED v1.6.7 · DOCUMENTATION</span>
+        <span>DELECTURED v2.0.0 · DOCUMENTATION</span>
         <span style="color:var(--text-tertiary);">WHISPER-TURBO · LLAMA-3.3-70B</span>
     </div>
 
@@ -35,10 +35,28 @@
             <a href="index.html#how-it-works">How It Works</a>
             <a href="guide.html" style="color:var(--accent); border-bottom-color:var(--accent);">Guide</a>
         </div>
-        <div class="nav-controls">
+        <div class="nav-controls" style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+            <span id="usage-display" class="usage-badge" style="display:none;"></span>
+            <span id="user-display" style="display:none;"></span>
+            <button class="btn" onclick="window.DeLecturedAuth?.openSidebar()" style="display:none;" id="past-lectures-btn">Past Lectures</button>
             <button class="icon-btn" id="theme-toggle" aria-label="Toggle Dark Mode">◑</button>
+            <button class="btn" onclick="window.DeLecturedAuth?.signOut()" style="border-color:var(--accent); color:var(--accent); display:none;" id="signout-btn">Sign Out</button>
         </div>
     </nav>
+
+    <!-- Auth wall (same as index.html) -->
+    <div id="auth-wall" style="display:none;">
+        <div class="auth-card">
+            <div class="footer-logo">DeLectured</div>
+            <p>Turn your lectures into exhaustive study materials.<br>4 free lectures per month. No credit card needed.</p>
+            <button class="google-signin-btn" onclick="window.DeLecturedAuth?.signInWithGoogle()">
+                Continue with Google
+            </button>
+            <p class="auth-note">Free &middot; 4 lectures/month &middot; No credit card</p>
+        </div>
+    </div>
+
+    <div id="app-content" style="display:none;">
 
     <div class="container" style="padding-top: 4rem; padding-bottom: 4rem;">
         <h1>Documentation.</h1>
@@ -50,10 +68,9 @@
             <h2>Getting Started</h2>
             <ul class="step-list">
                 <li class="step-item guide-hover-lift">
-                    <h3>Get a Groq API Key</h3>
-                    <p>DeLectured runs entirely in your browser using the Groq API for blazing fast inference. Get a
-                        free API key at <a href="https://console.groq.com/keys" target="_blank">console.groq.com</a>.
-                    </p>
+                    <h3>Sign in with Google</h3>
+                    <p>DeLectured v2.0 uses server-side API keys. Click "Continue with Google" to authenticate —
+                        no API key needed. You get 4 free lectures per month on our Groq quota.</p>
                 </li>
                 <li class="step-item guide-hover-lift">
                     <h3>Prepare Your Audio</h3>
@@ -80,9 +97,9 @@
             <h3
                 style="color: var(--accent); font-family: var(--font-mono); font-size: 14px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem;">
                 Privacy Architecture</h3>
-            <p><strong>Your audio never touches our servers.</strong> DeLectured is a static web application. When you
-                upload a file, it is compressed in your browser and sent directly to Groq's secure API endpoints. We
-                have no databases, no user accounts, and no access to your API key or data.</p>
+            <p><strong>Your audio is processed via our backend proxy.</strong> DeLectured v2.0 routes audio through a
+                FastAPI server to Groq — your API key never leaves our infrastructure. We store only session metadata
+                and generated notes in Supabase (PostgreSQL). Audio is never persisted. You can delete sessions anytime.</p>
         </div>
 
         <!-- Limits -->
@@ -295,22 +312,23 @@
                     10-minute segments.</p>
             </div>
             <div class="guide-faq-item guide-hover-lift">
-                <h3 style="font-size: 16px;">Why do I need my own API key?</h3>
-                <p>Because DeLectured has no backend and is completely free. Providing your own Groq key allows you to
-                    use their extremely fast inference models at no cost to you (within their generous free tier).</p>
+                <h3 style="font-size: 16px;">Why do I need to sign in?</h3>
+                <p>DeLectured v2.0 uses a backend to proxy Groq API calls (keeping keys server-side) and enforce a
+                    fair-use limit of 4 lectures/month per user. Google OAuth gives you a secure account without passwords.</p>
             </div>
             <div class="guide-faq-item guide-hover-lift">
                 <h3 style="font-size: 16px;">Can I save my notes?</h3>
-                <p>Yes. Use the <strong>"Download Full Report"</strong> button to get a .TXT file containing the
-                    summary, concepts, and full transcript. You can also use <strong>"Print PDF"</strong> for a
-                    formatted version. Because there is no database, refreshing the page will clear your current notes.
-                </p>
+                <p>Yes! DeLectured v2.0 auto-saves every processed lecture to your account. Access past sessions via
+                    the "Past Lectures" button in the nav. You can also export: <strong>"Download Full Report"</strong>
+                    (.TXT with summary, concepts, transcript), <strong>"Print PDF"</strong> (formatted), or
+                    <strong>"Export as PDF"</strong> (client-side html2pdf). Sessions persist across devices.</p>
             </div>
             <div class="guide-faq-item guide-hover-lift">
                 <h3 style="font-size: 16px;">What models does DeLectured use?</h3>
                 <p><strong>Transcription:</strong> <code>whisper-large-v3-turbo</code> via Groq. <strong>Domain
                         Analysis:</strong> <code>llama-3.1-8b-instant</code> for fast classification. <strong>Study
-                        Guide Generation:</strong> <code>llama-3.3-70b-versatile</code> for exhaustive structuring.
+                        Guide Generation:</strong> <code>llama-3.3-70b-versatile</code> (fallback:
+                    <code>llama-3.1-70b-versatile</code>) for exhaustive structuring.
                     <strong>Q&A Chat:</strong> <code>llama-3.1-8b-instant</code> with streaming.
                 </p>
             </div>
@@ -340,6 +358,27 @@
         </div>
     </footer>
 
+    </div><!-- /app-content -->
+
+    <!-- Sessions Sidebar Panel (same as index.html) -->
+    <div id="sessions-panel" class="sessions-panel">
+        <div class="sessions-panel-header">
+            <span class="label">LIBRARY</span>
+            <button class="icon-btn" onclick="window.DeLecturedAuth?.closeSidebar()" aria-label="Close">&#x2715;</button>
+        </div>
+        <div class="sidebar-tabs" style="display:flex; border-bottom:1px solid var(--border); background:var(--paper-3);">
+            <button class="sidebar-tab active" id="tab-sessions" onclick="window.DeLecturedAuth?.setSidebarTab('sessions')" style="flex:1; padding:0.75rem; background:none; border:none; font-family:var(--font-mono); font-size:11px; text-transform:uppercase; cursor:pointer; color:var(--text-secondary); border-bottom:2px solid var(--accent);">Sessions</button>
+            <button class="sidebar-tab" id="tab-recordings" onclick="window.DeLecturedAuth?.setSidebarTab('recordings')" style="flex:1; padding:0.75rem; background:none; border:none; font-family:var(--font-mono); font-size:11px; text-transform:uppercase; cursor:pointer; color:var(--text-tertiary); border-bottom:2px solid transparent;">Recordings</button>
+        </div>
+        <div id="sessions-content" class="sessions-list" style="display:block;">
+            <div class="session-empty">Loading...</div>
+        </div>
+        <div id="recordings-content" class="sessions-list" style="display:none;"></div>
+    </div>
+    <div id="sessions-backdrop" class="sessions-backdrop" onclick="window.DeLecturedAuth?.closeSidebar()"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="auth.js"></script>
     <script src="ink-transition.js"></script>
     <script>
         // Theme toggle with ink transition support
@@ -347,8 +386,8 @@
             if (window.InkTransition) {
                 window.InkTransition.toggle();
             } else {
-                const isDark = document.body.parentElement.getAttribute('data-theme') === 'dark';
-                document.body.parentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+                const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
             }
         });
     </script>
