@@ -29,6 +29,7 @@ const URLS_TO_CACHE = [
     './js/analysis-schema.js',
     './js/queue.js',
     './js/queue-controls.js',
+    './js/notes-recovery.js',
     './js/recorder.js',
     './js/pcm-chunker.js',
     './js/encoder.js',
