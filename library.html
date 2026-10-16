@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DeLectured — Your lecture, understood</title>
+<meta name="description" content="Record, revisit and understand your lectures. A private browser library with your choice of AI providers.">
+<link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="folio-polish.css">
+<script src="ink-transition.js"></script>
+</head><body>
+<a class="skip-link" href="#main-content">Skip to content</a>
+<aside class="sidebar" id="app-sidebar" aria-label="Workspace navigation">
+    <div class="sidebar-brand"><a href="index.html" class="wordmark">DeLectured</a><button id="sidebar-close" class="icon-btn" aria-label="Collapse sidebar">«</button></div>
+    <nav class="sidebar-primary" aria-label="Main workspace">
+        <p class="eyebrow">Workspace</p>
+        <a href="index.html" data-route="home"><span data-icon="home" aria-hidden="true"></span><span>Home &amp; setup</span></a>
+        <a href="index.html?capture=1" data-route="capture"><span data-icon="mic" aria-hidden="true"></span><span>Record lecture</span></a>
+        <a href="library.html" data-route="library"><span data-icon="library" aria-hidden="true"></span><span>Library</span></a>
+    </nav>
+    <div class="sidebar-history"><p class="eyebrow">Recent lectures</p><nav id="recent-lectures" aria-label="Recent lectures"><p class="quiet">Your lectures will appear here.</p></nav></div>
+    <div class="sidebar-help"><a href="guide.html" data-route="guide">Guide &amp; recovery <span aria-hidden="true">↗</span></a></div>
+</aside>
+<button class="sidebar-scrim" id="sidebar-scrim" aria-label="Close navigation" hidden></button>
+<header class="masthead">
+    <div class="masthead-left"><button id="sidebar-toggle" class="icon-btn" aria-controls="app-sidebar" aria-expanded="true" aria-label="Toggle navigation">☰</button><a class="wordmark mobile-wordmark" href="index.html">DeLectured</a><nav class="workspace-nav" aria-label="Workspace"><a href="index.html?capture=1">Capture</a><a href="library.html">Library</a></nav></div>
+    <div class="masthead-right"><form class="workspace-search" action="library.html" role="search"><label class="sr-only" for="workspace-query">Search lectures and topics</label><input id="workspace-query" name="q" type="search" placeholder="Search lectures, topics…"><button type="submit" aria-label="Search library"><span data-icon="search" aria-hidden="true"></span></button></form><a class="nav-link" href="index.html?settings=1">Settings</a><button class="theme-toggle" id="theme-toggle" aria-label="Switch to dark theme" aria-pressed="false"><span aria-hidden="true">☼</span><span aria-hidden="true">☾</span></button></div>
+</header>
+<main class="container" id="main-content"><section class="library-section"><p class="eyebrow">Your collection</p><h1>A little knowledge,<br><em>worth keeping.</em></h1><p class="home-intro">Revisit an explanation. Make a connection. Pick up where you left off.</p>
+<div class="library-toolbar"><label for="library-search" class="sr-only">Search title, transcript or summary</label><input id="library-search" type="search" placeholder="Search your lectures…"><button id="export-library-btn">Back up Library</button><button id="import-library-btn">Import backup</button><input type="file" id="import-input" hidden accept=".json"></div>
+<div class="import-policy"><label for="import-conflicts">When importing existing lectures</label><select id="import-conflicts"><option value="reject">Keep existing — reject conflicts</option><option value="overwrite">Replace matching saved lectures</option></select></div>
+<table class="ledger-table"><caption class="sr-only">Saved lectures</caption><thead><tr><th scope="col">Date</th><th scope="col">Lecture</th><th scope="col">Actions</th></tr></thead><tbody id="library-list"></tbody></table><p class="privacy-note">Saved in this browser. Export a backup before clearing site data or switching devices.</p>
+</section></main><nav class="mobile-nav" aria-label="Main navigation"><a href="index.html?capture=1"><span data-icon="mic" aria-hidden="true"></span>Capture</a><a href="library.html"><span data-icon="library" aria-hidden="true"></span>Library</a><a href="index.html?settings=1"><span data-icon="settings" aria-hidden="true"></span>Settings</a></nav>
+<div id="app-notice" role="status" class="app-notice" hidden></div>
+<script type="module" src="js/library.js"></script></body></html>

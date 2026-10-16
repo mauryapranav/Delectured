@@ -30,6 +30,7 @@ Thumbs.db
 logs/
 
 # Build
+node_modules/
 dist/
 build/
 *.egg-info/
@@ -40,3 +41,23 @@ build/
 
 # GEMINI.md (local AI notes)
 GEMINI.md
+
+/dist/
+
+# Local workspace and generated files
+docs/
+.agents/
+.codex/
+.claude/
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+*.log
+*.tmp
+.env
+.env.*
+node_modules/
+dist/
+app_v2.js
+index_v2.html
+styles_v2.css

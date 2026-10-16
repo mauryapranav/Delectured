@@ -1,0 +1,16 @@
+{
+    "name": "DeLectured",
+    "short_name": "DeLectured",
+    "description": "Editorial Lecture Intelligence",
+    "start_url": "./index.html",
+    "display": "standalone",
+    "background_color": "#F5F0E8",
+    "theme_color": "#0A0A08",
+    "icons": [
+        {
+            "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%230A0A08'/%3E%3Cpath d='M256 128v256M128 256h256' stroke='%23F5F0E8' stroke-width='32' stroke-linecap='round'/%3E%3C/svg%3E",
+            "sizes": "512x512",
+            "type": "image/svg+xml"
+        }
+    ]
+}

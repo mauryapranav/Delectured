@@ -1,13 +1,24 @@
 // ==========================================
-// DeLectured — Ink Spread Theme Transition v2
-// Reverse-layer architecture: clone = old theme (peeled away),
-// real page = new theme (revealed beneath).
+// DeLectured — Ink Spread Theme Transition
+// Animate browser snapshots when available; retain a clipped clone fallback.
 // ==========================================
 (function () {
   'use strict';
 
   let _running = false;
-  let _lastCorner = -1;
+  const storageKey = 'delectured-theme';
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    try { localStorage.setItem(storageKey, theme); } catch { /* Theme works without storage access. */ }
+    const button = document.getElementById('theme-toggle');
+    button?.setAttribute('aria-pressed', String(theme === 'dark'));
+    button?.setAttribute('aria-label', theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
+  }
+  let initial;
+  try { initial = localStorage.getItem(storageKey); } catch {}
+  if (!['light', 'dark'].includes(initial)) initial = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  applyTheme(initial);
+  document.addEventListener('DOMContentLoaded', () => applyTheme(document.documentElement.dataset.theme));
 
   // ---- Value noise ----
   const _seed = Math.random() * 65536;
@@ -22,35 +33,13 @@
     return hash(i) * (1 - u) + hash(i + 1) * u;
   }
 
-  // ---- Easing: slow start → fluid momentum → gentle settle ----
-  function inkEase(t) {
-    if (t < 0.5) return 4 * t * t * t;
-    return 1 - Math.pow(-2 * t + 2, 3) / 2;
-  }
-
-  // ---- Corner origin (never repeat) ----
-  function pickCorner() {
-    let c;
-    do { c = Math.floor(Math.random() * 4); } while (c === _lastCorner);
-    _lastCorner = c;
-    return c;
-  }
-  function cornerXY(corner, vw, vh) {
-    switch (corner) {
-      case 0: return { x: 0, y: 0 };
-      case 1: return { x: vw, y: 0 };
-      case 2: return { x: vw, y: vh };
-      case 3: return { x: 0, y: vh };
-    }
-  }
-
   // ---- Build aggressive organic ink path ----
   function buildInkPath(cx, cy, progress, vw, vh, goingDark, noiseSeed) {
-    const maxR = Math.sqrt(vw * vw + vh * vh) * 1.2;
+    const maxR = Math.max(...[[0,0],[vw,0],[0,vh],[vw,vh]].map(([x,y]) => Math.hypot(x-cx,y-cy))) * 1.28;
     const r = maxR * progress;
-    if (r < 1) return '';
 
-    const N = 72;
+
+    const N = 64;
     const coords = [];
 
     // Direction-dependent noise character
@@ -84,7 +73,9 @@
       const wobble = n1 * loAmp + n2 * midAmp + n3 * hiAmp
         + fiber * 0.16 - recess * 0.13 + timeMicro;
       const stretch = 1 + 0.07 * Math.cos(angle * 2 + 0.4);
-      const pr = r * (1 + wobble) * stretch;
+      // Keep the capillary edge irregular, but guarantee it covers every corner
+      // before the old page is removed (1.28 * 0.8 > 1).
+      const pr = r * Math.max(0.8, Math.min(1.3, (1 + wobble) * stretch));
 
       coords.push({
         x: cx + Math.cos(angle) * pr,
@@ -112,139 +103,81 @@
     return d;
   }
 
-  // ---- Main toggle ----
-  function toggle() {
+  // Build the irregular outline twice, then let the browser interpolate it.
+  // No per-frame path strings, DOM mutations, SVG blur, or live-page repaint loop.
+  async function toggle(source = document.getElementById('theme-toggle')) {
     if (_running) return;
-
-    // Respect reduced motion
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-      document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
-      return;
-    }
+    const root = document.documentElement;
+    const fromTheme = root.dataset.theme === 'dark' ? 'dark' : 'light';
+    const toTheme = fromTheme === 'dark' ? 'light' : 'dark';
+    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+    if (reducedMotion.matches || document.hidden) { applyTheme(toTheme); return; }
 
     _running = true;
-
-    // Capture body's inherited color NOW, before the theme swap changes it.
-    // Elements in the clone inherit color via DOM: clone → body → html.
-    // After the swap, body's color changes to the new theme — making inherited
-    // text in the clone invisible against the clone's old-theme background.
-    const bodyColor = getComputedStyle(document.body).color;
-
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const fromTheme = isDark ? 'dark' : 'light';
-    const toTheme = isDark ? 'light' : 'dark';
-    const goingDark = toTheme === 'dark';
-
-    const vw = document.documentElement.clientWidth;
-    const vh = window.innerHeight;
-    const currentScrollY = window.scrollY;
-
-    const corner = pickCorner();
-    const origin = cornerXY(corner, vw, vh);
-    const noiseSeed = Math.random() * 100;
-
-    // ---- SVG clip-path (evenodd: outer rect + inner ink hole) ----
-    const svgNS = 'http://www.w3.org/2000/svg';
-    const svg = document.createElementNS(svgNS, 'svg');
-    svg.setAttribute('width', '0');
-    svg.setAttribute('height', '0');
-    svg.style.position = 'absolute';
-    svg.style.pointerEvents = 'none';
-
-    const clipPath = document.createElementNS(svgNS, 'clipPath');
-    const clipId = 'ink-clip-' + Date.now();
-    clipPath.id = clipId;
-    clipPath.setAttribute('clipPathUnits', 'userSpaceOnUse');
-
-    const pathEl = document.createElementNS(svgNS, 'path');
-    const outerRect = `M-200,-200 L${vw + 200},-200 L${vw + 200},${vh + 200} L-200,${vh + 200} Z`;
-    pathEl.setAttribute('d', outerRect);
-    pathEl.setAttribute('clip-rule', 'evenodd');
-    clipPath.appendChild(pathEl);
-    svg.appendChild(clipPath);
-    document.body.appendChild(svg);
-
-    // ---- Clone body content (OLD theme) into fixed overlay ----
-    const cloneWrapper = document.createElement('div');
-    cloneWrapper.className = 'theme-clone';
-    cloneWrapper.setAttribute('data-theme', fromTheme);
-    cloneWrapper.style.clipPath = `url(#${clipId})`;
-    cloneWrapper.style.color = bodyColor; // Pin old-theme color — breaks inheritance from body
-
-    const cloneInner = document.createElement('div');
-    cloneInner.className = 'clone-inner';
-    cloneInner.style.width = vw + 'px';
-    cloneInner.style.minHeight = document.body.scrollHeight + 'px';
-
-    Array.from(document.body.children).forEach(child => {
-      if (child === svg || child === cloneWrapper || child.tagName === 'SCRIPT') return;
-      cloneInner.appendChild(child.cloneNode(true));
-    });
-
-    cloneWrapper.appendChild(cloneInner);
-    document.body.appendChild(cloneWrapper);
-
-    // Match scroll position (programmatic scrollTop works with overflow:hidden)
-    cloneWrapper.scrollTop = currentScrollY;
-
-    // ---- Fix clone rendering artifacts ----
-
-    // 1. Fix fade-up animations resetting to opacity:0
-    cloneWrapper.querySelectorAll('.fade-up').forEach(el => {
-      el.style.opacity = '1';
-      el.style.animation = 'none';
-    });
-
-    // 2. Copy canvas content (concept graph renders blank otherwise)
-    const origCanvases = document.body.querySelectorAll('canvas');
-    const cloneCanvases = cloneInner.querySelectorAll('canvas');
-    origCanvases.forEach((orig, idx) => {
-      if (cloneCanvases[idx]) {
-        try {
-          cloneCanvases[idx].width = orig.width;
-          cloneCanvases[idx].height = orig.height;
-          cloneCanvases[idx].getContext('2d').drawImage(orig, 0, 0);
-        } catch (e) { /* cross-origin or tainted — acceptable loss */ }
+    root.setAttribute('data-ink-running', '');
+    const vw = root.clientWidth, vh = innerHeight;
+    const rect = source?.getBoundingClientRect();
+    const origin = rect ? {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2} : {x: vw / 2, y: 32};
+    const seed = Math.random() * 100, goingDark = toTheme === 'dark';
+    const startPath = buildInkPath(origin.x, origin.y, 0, vw, vh, goingDark, seed);
+    const endPath = buildInkPath(origin.x, origin.y, 1, vw, vh, goingDark, seed);
+    const timing = {duration: goingDark ? 2600 : 2400, easing: 'ease-in-out', fill: 'both'};
+    let transition, animation, clone, stopRequested = false;
+    const finish = () => { stopRequested = true; transition?.skipTransition(); try { animation?.finish(); } catch {} };
+    const motionChanged = () => {if (reducedMotion.matches) finish();};
+    const visibilityChanged = () => {if (document.hidden) finish();};
+    window.addEventListener('resize', finish, {once:true});
+    window.addEventListener('beforeprint', finish, {once:true});
+    document.addEventListener('visibilitychange', visibilityChanged);
+    reducedMotion.addEventListener('change', motionChanged);
+    try {
+      if (typeof document.startViewTransition === 'function') {
+        transition = document.startViewTransition(() => applyTheme(toTheme));
+        // A skipped/hidden-tab transition must still apply and save the theme.
+        transition.updateCallbackDone.catch(() => {});
+        transition.finished.catch(() => {});
+        await transition.ready;
+        if (stopRequested) return;
+        animation = root.animate({clipPath: [`path("${startPath}")`, `path("${endPath}")`]},
+          {...timing, pseudoElement:'::view-transition-new(root)'});
+        await animation.finished;
+        await transition.finished;
+      } else {
+        // Older browsers keep the organic reveal, without a dynamic SVG filter.
+        const bodyColor = getComputedStyle(document.body).color;
+        const canvases = [...document.querySelectorAll('canvas')];
+        clone = document.createElement('div');
+        clone.className = 'theme-clone'; clone.inert = true;
+        clone.setAttribute('aria-hidden', 'true'); clone.dataset.theme = fromTheme;
+        clone.style.color = bodyColor;
+        const inner = document.createElement('div'); inner.className = 'clone-inner';
+        inner.style.width = `${vw}px`; inner.style.minHeight = `${document.body.scrollHeight}px`;
+        for (const child of document.body.children) if (child.tagName !== 'SCRIPT') inner.append(child.cloneNode(true));
+        clone.append(inner); document.body.append(clone); clone.scrollTop = scrollY;
+        inner.querySelectorAll('canvas').forEach((canvas, i) => {
+          try {canvas.getContext('2d').drawImage(canvases[i], 0, 0);} catch {}
+        });
+        const outer = `M-200,-200 L${vw+200},-200 L${vw+200},${vh+200} L-200,${vh+200} Z`;
+        const clip = path => `path(evenodd, "${outer} ${path}")`;
+        clone.style.clipPath = clip(startPath);
+        // Paint the old page once before revealing the new theme below it.
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        applyTheme(toTheme);
+        if (stopRequested) return;
+        animation = clone.animate({clipPath:[clip(startPath),clip(endPath)]}, timing);
+        await animation.finished;
       }
-    });
-
-    // 3. Fix any display:none terminal or results sections to match current state
-    // (cloneNode preserves inline styles, so this is handled automatically)
-
-    // ---- Wait for clone to be fully painted before swapping the real page ----
-    // Double-rAF: first rAF = browser has processed DOM, second rAF = clone is composited.
-    // Only THEN do we swap the theme underneath — the clone covers the flash completely.
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        document.documentElement.setAttribute('data-theme', toTheme);
-
-        // ---- Animate: grow the ink hole, peeling away the old theme clone ----
-        const duration = goingDark ? 1400 : 1300;
-        const startTime = performance.now();
-
-        function frame(now) {
-          const elapsed = now - startTime;
-          const rawT = Math.min(elapsed / duration, 1);
-          const t = inkEase(rawT);
-
-          if (t > 0.001) {
-            const inkPath = buildInkPath(origin.x, origin.y, t, vw, vh, goingDark, noiseSeed);
-            pathEl.setAttribute('d', outerRect + ' ' + inkPath);
-          }
-
-          if (rawT < 1) {
-            requestAnimationFrame(frame);
-          } else {
-            cloneWrapper.remove();
-            svg.remove();
-            _running = false;
-          }
-        }
-
-        requestAnimationFrame(frame);
-      });
-    });
+    } catch {
+      transition?.skipTransition();
+      applyTheme(toTheme);
+    } finally {
+      clone?.remove(); animation?.cancel();
+      window.removeEventListener('resize', finish);
+      window.removeEventListener('beforeprint', finish);
+      document.removeEventListener('visibilitychange', visibilityChanged);
+      reducedMotion.removeEventListener('change', motionChanged);
+      root.removeAttribute('data-ink-running'); _running = false;
+    }
   }
 
   window.InkTransition = { toggle };

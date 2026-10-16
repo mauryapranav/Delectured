@@ -1,0 +1,83 @@
+export class ProviderError extends Error {
+    constructor(kind, message, {providerId, status, retryAfterMs, retryable = false} = {}) {
+        super(message);
+        this.name = 'ProviderError';
+        Object.assign(this, {kind, providerId, status, retryAfterMs, retryable});
+    }
+}
+export function aborted() { return new DOMException('Request cancelled.', 'AbortError'); }
+export function throwIfAborted(signal) { if (signal?.aborted) throw aborted(); }
+export function parseRetryAfter(value, now = Date.now()) {
+    if (!value) return undefined;
+    const seconds = Number(value);
+    const result = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(value) - now;
+    return Number.isFinite(result) ? Math.max(0, result) : undefined;
+}
+
+// Raw bodies, keys, URLs and prompts never become error messages or diagnostic fields.
+export async function requestJSON(url, {providerId, headers, body, signal, timeoutMs = 120000}) {
+    throwIfAborted(signal);
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new ProviderError('unsupported', 'Invalid request timeout.', {providerId});
+    const controller = new AbortController();
+    const cancel = () => controller.abort();
+    signal?.addEventListener('abort', cancel, {once: true});
+    let timedOut = false;
+    const timer = setTimeout(() => {timedOut = true; controller.abort();}, timeoutMs);
+    try {
+        const response = await fetch(url, {method: 'POST', headers, body, signal: controller.signal,
+            credentials: 'omit', redirect: 'error', cache: 'no-store', referrerPolicy: 'no-referrer'});
+        let data;
+        // Read failures are network errors; only JSON syntax failures are response errors.
+        const responseText = await response.text();
+        try { data = JSON.parse(responseText); }
+        catch {
+            throwIfAborted(signal);
+            if (timedOut) throw new ProviderError('network', 'The provider request timed out.', {providerId, retryable: true});
+            if (response.ok) throw new ProviderError('response', 'The provider returned an unreadable response.', {providerId});
+        }
+        throwIfAborted(signal);
+        const status = response.status;
+        if (!response.ok || data?.error) {
+            const code = String(data?.error?.code ?? data?.error?.type ?? '').toLowerCase();
+            const invalidGoogleKey = Array.isArray(data?.error?.details) && data.error.details.some(detail => detail?.reason === 'API_KEY_INVALID');
+            let kind = 'response';
+            if (status === 401 || status === 403 || invalidGoogleKey) kind = 'auth';
+            else if (status === 402 || ['insufficient_quota', 'quota_exceeded', 'billing_hard_limit_reached'].includes(code)) kind = 'quota';
+            else if (status === 429) kind = 'rate_limit';
+            else if (status === 404 || status === 413) kind = 'unsupported';
+            else if (status >= 500) kind = 'network';
+            const messages = {auth: 'The provider rejected the API key or access permissions.', quota: 'The provider account has no remaining quota or credit.',
+                rate_limit: 'The provider rate limit was reached. Retry after the indicated delay.', unsupported: 'The provider does not support this endpoint, model, or request size.',
+                network: 'The provider is temporarily unavailable.', response: 'The provider rejected the request. Check the selected model and its supported parameters.'};
+            throw new ProviderError(kind, messages[kind], {providerId, status, retryAfterMs: parseRetryAfter(response.headers.get('retry-after')),
+                retryable: kind === 'rate_limit' || kind === 'network'});
+        }
+        return data;
+    } catch (error) {
+        throwIfAborted(signal);
+        if (error instanceof ProviderError) throw error;
+        throw new ProviderError('network', timedOut ? 'The provider request timed out.' : 'Could not reach the provider. Check the connection and browser access support.', {providerId, retryable: true});
+    } finally {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', cancel);
+    }
+}
+
+export function normalizeText(text, {providerId, jsonMode = false} = {}) {
+    if (typeof text !== 'string' || !text.trim()) throw new ProviderError('response', 'The provider returned no usable text.', {providerId});
+    if (jsonMode) {
+        try {
+            const value = JSON.parse(text);
+            if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error();
+        } catch { throw new ProviderError('response', 'The provider did not return the requested JSON object.', {providerId}); }
+    }
+    return text;
+}
+export function normalizeTranscript(data, providerId) {
+    if (typeof data?.text !== 'string') throw new ProviderError('response', 'The provider returned no transcript.', {providerId});
+    const segments = data.segments ?? [];
+    if (!Array.isArray(segments) || segments.some(s => !s || typeof s.text !== 'string' || !Number.isFinite(s.start) || !Number.isFinite(s.end) || s.start < 0 || s.end < s.start)) {
+        throw new ProviderError('response', 'The provider returned invalid transcript timestamps.', {providerId});
+    }
+    return {text: data.text, segments: segments.map(({start, end, text}) => ({start, end, text}))};
+}
