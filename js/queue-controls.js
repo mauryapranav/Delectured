@@ -27,8 +27,8 @@ export function initQueueControls(queue, {beforeRetry = async () => {}, recovere
         const urls = [];
         function clearExports() {urls.splice(0).forEach(url => URL.revokeObjectURL(url)); exports.replaceChildren();}
         element.append(label, status);
-        button('Resume saved work', async () => {await beforeRetry(id); await recover(id, {retry: false}); await recovered(id);}, true);
-        button('Retry after fixing the problem', async () => {await beforeRetry(id); await recover(id, {retry: true}); await recovered(id);}, true);
+        button('Resume saved work', async () => {await beforeRetry(id); await recover(id, {retry: false}); await recovered(id, {retry: false});}, true);
+        button('Retry after fixing the problem', async () => {await beforeRetry(id); await recover(id, {retry: true}); await recovered(id, {retry: true});}, true);
         button('Export retained audio', async () => {
             clearExports();
             const chunks = await queue.getRetainedAudio(id);

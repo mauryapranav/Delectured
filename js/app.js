@@ -8,6 +8,7 @@ import {initProviderSettings} from './provider-settings.js';
 import {Session} from './session.js';
 import { Queue } from './queue.js';
 import {initQueueControls} from './queue-controls.js';
+import {refreshNotesSelection} from './notes-recovery.js';
 import { runPipeline } from './pipeline.js';
 import {assembleTranscript} from './transcript.js';
 import * as store from './store.js';
@@ -58,7 +59,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             currentLectureId = id; switchView('recording-section');
         },
         recover: (id, options) => session.recover(id, options),
-        recovered: id => generateFinalReport(id),
+        recovered: (id, options) => generateFinalReport(id, options),
         discard: id => id === currentLectureId ? discardRecording() : queue.discard(id),
     });
     queue.subscribe(event => {
@@ -301,13 +302,14 @@ async function discardRecording() {
     switchView('input-section');
 }
 
-async function generateFinalReport(lectureId = currentLectureId) {
+async function generateFinalReport(lectureId = currentLectureId, {retry = false} = {}) {
     if (lectureId !== currentLectureId) return;
     if (reportController) throw new Error('A report is already being prepared.');
     const controller = new AbortController(); reportController = controller;
     const signal = controller.signal;
     const check = () => {if (signal.aborted || lectureId !== currentLectureId) throw new DOMException('Cancelled.', 'AbortError');};
     try {
+        if (retry) {await refreshNotesSelection(lectureId); check();}
         const lecture = await store.getLecture(lectureId); check();
         const allChunks = await store.getAllChunks(lectureId); check();
         if (allChunks.some(chunk => chunk.status !== 'transcribed')) throw new Error('Transcription is not finished.');
