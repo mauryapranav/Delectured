@@ -175,3 +175,15 @@ test('independent providers and unknown selection never fall back to Groq', asyn
     await assert.rejects(complete({providerId: 'unknown', systemPrompt: '', userPrompt: 'Text'}), {kind: 'unsupported'});
     assert.equal(requests.length, 1);
 });
+
+test('404 and 413 identify the request stage without exposing provider text', async () => {
+    for (const [status, expected] of [[404, /model was not found/], [413, /request is too large/]]) {
+        globalThis.fetch = async () => Response.json({error: {message:'secret-key secret lecture'}}, {status});
+        await assert.rejects(requestJSON('https://api.groq.com/openai/v1/audio/transcriptions', {providerId:'groq',body:'audio'}), error => {
+            assert.equal(error.kind,'unsupported'); assert.equal(error.retryable,false);
+            assert.match(error.message,new RegExp(`Groq transcription request failed \\(HTTP ${status}\\)`));
+            assert.match(error.message,expected); assert(!error.message.includes('secret'));
+            return true;
+        });
+    }
+});

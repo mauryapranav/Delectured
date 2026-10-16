@@ -49,7 +49,15 @@ export async function requestJSON(url, {providerId, headers, body, signal, timeo
             const messages = {auth: 'The provider rejected the API key or access permissions.', quota: 'The provider account has no remaining quota or credit.',
                 rate_limit: 'The provider rate limit was reached. Retry after the indicated delay.', unsupported: 'The provider does not support this endpoint, model, or request size.',
                 network: 'The provider is temporarily unavailable.', response: 'The provider rejected the request. Check the selected model and its supported parameters.'};
-            throw new ProviderError(kind, messages[kind], {providerId, status, retryAfterMs: parseRetryAfter(response.headers.get('retry-after')),
+            // Show only fixed diagnostic labels, never provider bodies or user input.
+            const names = {groq:'Groq',openai:'OpenAI',gemini:'Gemini',openrouter:'OpenRouter',mistral:'Mistral',anthropic:'Anthropic',compatible:'Custom provider'};
+            const path = new URL(url).pathname;
+            const stage = path.endsWith('/audio/transcriptions') ? 'transcription' : path.endsWith('/chat/completions') || path.endsWith('/messages') ? 'notes/answer' : 'API';
+            let message = messages[kind];
+            if (status === 404) message = 'The endpoint or model was not found. Check the selected model ID and your access to it in Settings.';
+            if (status === 413) message = 'The request is too large for this provider or account. Reduce the audio chunk or text context size; retrying the same request will not help.';
+            message = `${names[providerId] || 'Provider'} ${stage} request failed (HTTP ${status}). ${message}`;
+            throw new ProviderError(kind, message, {providerId, status, retryAfterMs: parseRetryAfter(response.headers.get('retry-after')),
                 retryable: kind === 'rate_limit' || kind === 'network'});
         }
         return data;
