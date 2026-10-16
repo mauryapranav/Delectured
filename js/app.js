@@ -59,7 +59,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             currentLectureId = id; switchView('recording-section');
         },
         recover: (id, options) => session.recover(id, options),
-        recovered: (id, options) => generateFinalReport(id, options),
+        recovered: async (id, options) => {
+            try {await generateFinalReport(id, options);}
+            catch (error) {await showProcessingError(error, id); throw error;}
+        },
         discard: id => id === currentLectureId ? discardRecording() : queue.discard(id),
     });
     queue.subscribe(event => {

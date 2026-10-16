@@ -53,6 +53,26 @@ test('malformed output gets exactly one repair and invented evidence is rejected
     }}), /twice/); assert.equal(calls, 2);
     assert.throws(() => validatePacket({notes: 'missing fields'}));
 });
+
+test('exhausted repair exposes a safe reason instead of hiding the notes failure', async () => {
+    await assert.rejects(runPipeline('Valid source words.', () => {}, {selection,
+        complete: async () => '{private provider text'}), error => {
+        assert.equal(error.kind, 'study_output');
+        assert.match(error.message, /invalid JSON/);
+        assert(!error.message.includes('private provider text'));
+        return true;
+    });
+    await assert.rejects(runPipeline('Valid source words.', () => {}, {selection,
+        complete: async r => {
+            const p = packet(JSON.parse(r.userPrompt).source);
+            p.evidence[0].quote = 'invented quote';
+            return JSON.stringify(p);
+        }}), error => {
+        assert.equal(error.kind, 'study_output');
+        assert.match(error.message, /Evidence does not occur in its source/);
+        return true;
+    });
+});
 test('changed model or language invalidates checkpoints; abort retains last completed checkpoint', async () => {
     let checkpoint; const controller = new AbortController(); let calls = 0;
     const text = 'Some material. '.repeat(500);
