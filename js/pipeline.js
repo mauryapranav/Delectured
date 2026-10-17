@@ -9,7 +9,17 @@ const validationReasons = new Set(['Expected an object.', 'Invalid text field.',
     'Evidence does not occur in its source.', 'Evidence is required.', 'Graph link references an unknown concept.',
     'Study output exceeds its size budget.', 'Overview exceeds its size budget.', 'Response exceeds its byte budget.']);
 function validationReason(error) {
-    if (error instanceof SyntaxError) return 'The response was invalid JSON.';
+    if (error instanceof SyntaxError || error.kind === 'response' && error.message === 'The provider did not return the requested JSON object.') return 'The response was invalid JSON.';
+    if (error.kind === 'response') {
+        if (Number.isInteger(error.status) && error.status >= 400 && error.status < 600) return `The provider rejected the notes request (HTTP ${error.status}). Check model support and request settings.`;
+        const providerReasons = new Map([
+            ['The provider did not finish a complete text response.', 'The provider stopped before completing the notes response.'],
+            ['Anthropic did not finish a complete text response.', 'The provider stopped before completing the notes response.'],
+            ['The provider returned no usable text.', 'The provider returned an empty notes response.'],
+            ['The provider returned an unreadable response.', 'The provider returned an unreadable API response.'],
+        ]);
+        if (providerReasons.has(error.message)) return providerReasons.get(error.message);
+    }
     return error instanceof TypeError && validationReasons.has(error.message)
         ? error.message : 'The response did not meet the study output requirements.';
 }
@@ -109,19 +119,24 @@ export async function runPipeline(input, onProgress = () => {}, options = {}) {
     };
     const ask = async (systemPrompt, payload, validator) => {
         const userPrompt = JSON.stringify(payload);
+        let repairReason = '';
         for (let attempt = 0; attempt < 2; attempt++) {
             throwIfAborted(signal);
-            const system = `${rules}\n${languages[language]}\n${systemPrompt}${attempt ? '\nThe previous output failed validation. Regenerate using the exact schema, size limits and literal evidence quotes.' : ''}`;
+            const system = `${rules}\n${languages[language]}\n${systemPrompt}${attempt ? `\nThe previous output failed validation: ${repairReason} Regenerate using the exact schema, size limits and literal evidence quotes.` : ''}`;
             if (byteLength(system) + byteLength(userPrompt) > LIMITS.requestBytes) throw new Error('Analysis request exceeds its byte budget.');
             try {
-                const raw = await request({...selection, systemPrompt: system, userPrompt, jsonMode: false, signal});
+                const raw = await request({...selection, systemPrompt: system, userPrompt, jsonMode: true, signal});
                 throwIfAborted(signal);
-                if (byteLength(raw) > LIMITS.packetBytes) throw new TypeError('Response exceeds its byte budget.');
-                return validator(JSON.parse(raw));
+                // Bound parsing work, then apply the content budget without indentation overhead.
+                if (byteLength(raw) > LIMITS.packetBytes * 4) throw new TypeError('Response exceeds its byte budget.');
+                const parsed = JSON.parse(raw);
+                if (byteLength(JSON.stringify(parsed)) > LIMITS.packetBytes) throw new TypeError('Response exceeds its byte budget.');
+                return validator(parsed);
             } catch (error) {
                 throwIfAborted(signal);
                 if (!(error instanceof SyntaxError || error instanceof TypeError || error.kind === 'response')) throw error;
                 if (attempt) throw Object.assign(new Error(`The provider returned invalid study output twice. ${validationReason(error)} Your saved transcript is retained.`), {kind: 'study_output'});
+                repairReason = validationReason(error);
                 onProgress('Repairing invalid study output once...');
             }
         }

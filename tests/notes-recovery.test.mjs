@@ -26,3 +26,36 @@ test('notes retry replaces the saved model without changing transcript or audio 
         assert.equal((await store.getLecture('lecture')).providerSelections.completion.model, 'openai/gpt-oss-120b');
     } finally {await store.close();}
 });
+
+test('legacy lecture retry fills missing selections without requiring an audio key', async () => {
+    let config;
+    globalThis.localStorage = {getItem: () => config, setItem: (_, value) => {config = value;}};
+    saveConfig({keys: {groq: 'test-key'}, transcriptionProvider: 'gemini', models: {groq: {completion: 'notes-model'}}});
+    const store = createLectureStore(`legacy-recovery-${crypto.randomUUID()}`);
+    try {
+        await store.saveLecture({id: 'old', transcript: 'Already transcribed.'});
+        await refreshNotesSelection('old', store);
+        const saved = await store.getLecture('old');
+        assert.equal(saved.providerSelections.completion.model, 'notes-model');
+        assert.equal(saved.providerSelections.transcription.providerId, 'groq');
+        assert.equal(saved.providerSelections.transcription.model, 'whisper-large-v3-turbo');
+        assert.equal(saved.transcript, 'Already transcribed.');
+    } finally {await store.close();}
+});
+
+test('retry with unchanged notes settings preserves validated checkpoints', async () => {
+    let config;
+    globalThis.localStorage = {getItem: () => config, setItem: (_, value) => {config = value;}};
+    saveConfig({keys: {groq: 'test-key'}, models: {groq: {completion: 'notes-model'}}});
+    const store = createLectureStore(`checkpoint-recovery-${crypto.randomUUID()}`);
+    try {
+        const selection = {providerId: 'groq', model: 'notes-model', baseUrl: 'https://api.groq.com/openai/v1'};
+        const checkpoint = {version: 1, key: 'a'.repeat(64), maps: [], merges: []};
+        await store.saveLecture({id: 'partial', transcript: 'Saved text', analysisCheckpoint: checkpoint,
+            providerSelections: {transcription: {...selection, model: 'whisper-large-v3-turbo'}, completion: selection}});
+        await refreshNotesSelection('partial', store);
+        assert.deepEqual((await store.getLecture('partial')).analysisCheckpoint, checkpoint);
+        await refreshNotesSelection('partial', store, {reset:true});
+        assert.equal((await store.getLecture('partial')).analysisCheckpoint, undefined);
+    } finally {await store.close();}
+});

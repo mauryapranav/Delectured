@@ -364,7 +364,7 @@ function initReportControls() {
         if (session.busy || reportController) throw new Error('Wait for the current work to finish.');
         reportActionPending = true;
         try {
-        await store.updateLecture(currentLectureId, {providerSelections: {transcription: (await openLecture(currentLectureId)).providerSelections?.transcription ?? getProviderSelection('transcription'), completion: validateProviderConfiguration('completion')}, analysisCheckpoint: undefined});
+        await refreshNotesSelection(currentLectureId, store, {reset:true});
         switchView('recording-section');
         try {await generateFinalReport();} catch (error) {await showProcessingError(error); throw error;}
         } finally {reportActionPending = false;}

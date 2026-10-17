@@ -3,7 +3,7 @@
 export const PROVIDER_IDS = Object.freeze(['groq', 'openai', 'gemini', 'openrouter', 'mistral', 'anthropic', 'compatible']);
 const catalog = {
     groq: {name: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', keyUrl: 'https://console.groq.com/keys', transcription: true, completion: true,
-        defaults: {transcription: 'whisper-large-v3-turbo', completion: 'llama-3.3-70b-versatile'}},
+        defaults: {transcription: 'whisper-large-v3-turbo', completion: 'openai/gpt-oss-120b'}},
     openai: {name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', keyUrl: 'https://platform.openai.com/api-keys', transcription: true, completion: true,
         defaults: {transcription: 'whisper-1', completion: ''}},
     gemini: {name: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', keyUrl: 'https://aistudio.google.com/app/apikey', transcription: true, completion: true,

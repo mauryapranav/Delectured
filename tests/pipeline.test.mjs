@@ -73,6 +73,33 @@ test('exhausted repair exposes a safe reason instead of hiding the notes failure
         return true;
     });
 });
+
+test('notes request JSON mode and repair includes the failed validation rule', async () => {
+    const calls = [];
+    await runPipeline('Valid source words.', () => {}, {selection, complete: async r => {
+        calls.push(r);
+        const p = packet(JSON.parse(r.userPrompt).source);
+        if (calls.length === 1) p.evidence[0].quote = 'invented';
+        return JSON.stringify(p);
+    }});
+    assert(calls.every(r => r.jsonMode === true));
+    assert.match(calls[1].systemPrompt, /Evidence does not occur in its source/);
+});
+
+test('valid pretty-printed JSON uses its content budget, not indentation overhead', async () => {
+    let calls = 0;
+    const result = await runPipeline('Valid source words.', () => {}, {selection, complete: async r => {
+        calls++;
+        const p = packet(JSON.parse(r.userPrompt).source);
+        p.concepts = Array.from({length:8}, (_, i) => ({...p.concepts[0], term:`Term ${i}`}));
+        p.flashcards = Array.from({length:8}, () => p.flashcards[0]);
+        const formatted = JSON.stringify(p, null, '\t'.repeat(10));
+        assert(byteLength(formatted) > ANALYSIS_LIMITS.packetBytes);
+        assert(byteLength(JSON.stringify(p)) < ANALYSIS_LIMITS.packetBytes);
+        return formatted;
+    }});
+    assert.equal(calls,1); assert.equal(result.concepts.length,8);
+});
 test('changed model or language invalidates checkpoints; abort retains last completed checkpoint', async () => {
     let checkpoint; const controller = new AbortController(); let calls = 0;
     const text = 'Some material. '.repeat(500);

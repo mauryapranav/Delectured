@@ -17,3 +17,14 @@ test('bounded Q&A validates quotes and rejects fabricated citations', async () =
     await assert.rejects(askLecture({lectureId: 'x', question: 'Vector?', signal: controller.signal}, options), {name: 'AbortError'});
     assert(retrievePassages('हिंदी में सदिश', 'सदिश').length);
 });
+
+test('Q&A requests JSON and hides provider text in parsing failures', async () => {
+    const options = {openLecture: async () => ({transcript: 'Python uses indentation.'}), complete: async req => {
+        assert.equal(req.jsonMode, true);
+        return '{private-response-text';
+    }};
+    await assert.rejects(askLecture({lectureId: 'x', question: 'Python?'}, options), error => {
+        assert.equal(error.message, 'The provider returned invalid answer JSON. Try the question again.');
+        return true;
+    });
+});

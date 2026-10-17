@@ -160,10 +160,27 @@ test('provider selections stay stable for an active operation after settings cha
     const selection = getProviderSelection('completion');
     saveConfig({notesProvider: 'openai', models: {groq: {completion: 'changed-model'}}});
     await complete({...selection, systemPrompt: '', userPrompt: ''});
-    assert.equal(JSON.parse(requests[0].body).model, 'llama-3.3-70b-versatile');
+    assert.equal(JSON.parse(requests[0].body).model, 'openai/gpt-oss-120b');
     assert.equal(requests[0].headers.Authorization, 'Bearer groq-key');
 });
 afterEach(() => {globalThis.fetch = originalFetch;});
+
+test('rate-limit message shows the provider retry delay without leaking response text', async () => {
+    globalThis.fetch = async () => Response.json({error:{message:'private quota detail'}}, {status:429, headers:{'retry-after':'75'}});
+    await assert.rejects(requestJSON('https://api.groq.com/openai/v1/chat/completions', {providerId:'groq'}), error => {
+        assert.equal(error.retryAfterMs,75000);
+        assert.match(error.message,/75 seconds/);
+        assert(!error.message.includes('private quota detail'));
+        return true;
+    });
+    globalThis.fetch = async () => Response.json({error:{code:'insufficient_quota'}}, {status:429});
+    await assert.rejects(requestJSON('https://api.groq.com/openai/v1/chat/completions', {providerId:'groq'}), error => {
+        assert.equal(error.kind,'quota');
+        assert.match(error.message,/no remaining quota/);
+        assert(!error.message.includes('Retry after'));
+        return true;
+    });
+});
 
 test('independent providers and unknown selection never fall back to Groq', async () => {
     saveConfig({keys: {groq: 'test-groq', openai: 'test-openai'}, notesProvider: 'openai', models: {openai: {completion: 'chosen-model'}}});
