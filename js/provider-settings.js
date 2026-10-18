@@ -7,6 +7,7 @@ export function initProviderSettings() {
     const content = document.querySelector('#keys-drawer .drawer-content');
     const saveButton = document.getElementById('save-keys-btn');
     const providers = listProviders();
+    const groups = new Map();
     let loadedCustomUrl = '';
     const field = (parent, label, id, type = 'text') => {
         const wrapper = document.createElement('div'); wrapper.className = 'provider-group';
@@ -18,6 +19,9 @@ export function initProviderSettings() {
     };
     const choices = document.createElement('div');
     content.insertBefore(choices, saveButton);
+    const intro = document.createElement('p'); intro.className = 'drawer-desc';
+    intro.textContent = 'Choose who transcribes your audio and who creates your notes. They can be different providers.';
+    choices.append(intro);
     for (const [id, label, capability] of [['transcription-provider', 'Transcription provider', 'transcription'], ['notes-provider', 'Notes provider', 'completion']]) {
         const select = field(choices, label, id, 'select');
         for (const provider of providers.filter(p => p[capability])) {
@@ -30,6 +34,8 @@ export function initProviderSettings() {
         if (!keyInput) keyInput = field(choices, provider.name, `key-${provider.id}`, 'password');
         keyInput.autocomplete = 'off';
         const group = keyInput.parentElement;
+        groups.set(provider.id, group);
+        choices.append(group);
         let link = group.querySelector('a');
         if (provider.keyUrl) {
             if (!link) { link = document.createElement('a'); group.querySelector('label').append(' ', link); }
@@ -42,6 +48,20 @@ export function initProviderSettings() {
         }
     }
     const baseUrl = field(choices, 'Custom API base URL (including /v1 if required)', 'compatible-base-url', 'url');
+    const selections = () => ({transcription:document.getElementById('transcription-provider').value,
+        completion:document.getElementById('notes-provider').value});
+    function updateFields() {
+        const selected = selections();
+        for (const provider of providers) {
+            groups.get(provider.id).hidden = !Object.values(selected).includes(provider.id);
+            for (const capability of ['transcription','completion']) {
+                const input = document.getElementById(`model-${provider.id}-${capability}`);
+                if (input) input.parentElement.hidden = selected[capability] !== provider.id;
+            }
+        }
+        baseUrl.parentElement.hidden = !Object.values(selected).includes('compatible');
+    }
+    for (const id of ['transcription-provider','notes-provider']) document.getElementById(id).addEventListener('change',updateFields);
     baseUrl.addEventListener('input', () => {
         if (baseUrl.value.replace(/\/+$/, '') !== loadedCustomUrl) document.getElementById('key-compatible').value = '';
     });
@@ -49,6 +69,7 @@ export function initProviderSettings() {
     note.textContent = 'Provider requests use your own key and quota. Browser connectivity checked; successful requests still require a valid key and supported model. Custom endpoints are unverified. Gemini audio returns text without timestamps.';
     choices.append(note);
     refreshSelects(choices);
+    updateFields();
     return {
         load() {
             const config = getConfig();
@@ -62,19 +83,22 @@ export function initProviderSettings() {
             document.getElementById('transcription-provider').value = config.transcriptionProvider;
             document.getElementById('notes-provider').value = config.notesProvider;
             baseUrl.value = loadedCustomUrl = config.compatibleBaseUrl;
+            updateFields();
             refreshSelects(choices);
         },
         save() {
             const keys = {}, models = {};
+            const selected = selections();
             for (const provider of providers) {
+                if (!Object.values(selected).includes(provider.id)) continue;
                 keys[provider.id] = document.getElementById(`key-${provider.id}`).value;
                 models[provider.id] = {};
                 for (const capability of ['transcription', 'completion']) {
                     const input = document.getElementById(`model-${provider.id}-${capability}`);
-                    if (input) models[provider.id][capability] = input.value;
+                    if (input && selected[capability] === provider.id) models[provider.id][capability] = input.value;
                 }
             }
-            saveConfig({keys, models, compatibleBaseUrl: baseUrl.value.trim(),
+            saveConfig({keys, models, ...(Object.values(selected).includes('compatible') ? {compatibleBaseUrl: baseUrl.value.trim()} : {}),
                 transcriptionProvider: document.getElementById('transcription-provider').value,
                 notesProvider: document.getElementById('notes-provider').value});
         },
