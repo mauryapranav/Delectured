@@ -10,6 +10,7 @@ import { Queue } from './queue.js';
 import {initQueueControls} from './queue-controls.js';
 import {refreshNotesSelection} from './notes-recovery.js';
 import {initProcessingFlow,processingIssue} from './processing-flow.js';
+import {watchAppUpdates,showAppUpdate} from './app-updates.js';
 import { runPipeline } from './pipeline.js';
 import {assembleTranscript} from './transcript.js';
 import * as store from './store.js';
@@ -128,7 +129,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 6. Register Service Worker
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('./sw.js').catch(err => {
+        navigator.serviceWorker.register('./sw.js').then(registration => {
+            watchAppUpdates(registration,navigator.serviceWorker,showAppUpdate);
+        }).catch(err => {
             console.warn('Service Worker registration failed:', err);
         });
     }
