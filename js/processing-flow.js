@@ -1,21 +1,23 @@
+import {PROVIDER_IDS} from './providers/catalog.js';
 export const PROCESSING_STAGES = Object.freeze(['prepare', 'transcribe', 'notes', 'save']);
 const labels = {prepare:'Prepare audio', transcribe:'Transcribe audio', notes:'Create study notes', save:'Save study material'};
-const kinds = ['auth','quota','rate_limit','network','unsupported','response','study_output','storage','cancelled','permission','unknown'];
-const reasons = ['json','evidence','size','incomplete','empty','schema','unknown'];
+const kinds = ['auth','quota','rate_limit','network','unsupported','response','study_output','storage','cancelled','permission','input','unknown'];
+const reasons = ['json','evidence','size','incomplete','empty','schema','unknown','empty_file','file_size','file_format','decode','duration'];
 export function processingIssue(error, stage, now = Date.now()) {
     let kind = error.name === 'AbortError' ? 'cancelled' : error.name === 'NotAllowedError' ? 'permission'
         : ['QuotaExceededError','UnknownError'].includes(error.name) || stage === 'save' ? 'storage' : error.kind;
     if (!kinds.includes(kind)) kind = 'unknown';
     const message = String(error.message ?? '');
-    const reason = kind !== 'study_output' ? 'unknown' : message.includes('invalid JSON') ? 'json'
+    const reason = kind === 'input' && reasons.includes(error.reason) ? error.reason : kind !== 'study_output' ? 'unknown' : message.includes('invalid JSON') ? 'json'
         : message.includes('Evidence') ? 'evidence' : /budget|size/.test(message) ? 'size'
         : message.includes('stopped before') ? 'incomplete' : message.includes('empty notes') ? 'empty' : 'schema';
-    return validateProcessingIssue({stage,kind,reason,status:error.status,
+    return validateProcessingIssue({stage,kind,reason,status:error.status,providerId:error.providerId,
         retryAt:kind === 'rate_limit' && Number.isFinite(error.retryAfterMs) ? now + Math.max(0,error.retryAfterMs) : undefined});
 }
 export function validateProcessingIssue(value) {
     if (!value || !PROCESSING_STAGES.includes(value.stage) || !kinds.includes(value.kind) || !reasons.includes(value.reason)) throw new TypeError('Invalid processing issue.');
     return {stage:value.stage,kind:value.kind,reason:value.reason,
+        ...(PROVIDER_IDS.includes(value.providerId)?{providerId:value.providerId}:{}),
         ...(Number.isInteger(value.status) && value.status >= 400 && value.status <= 599 ? {status:value.status} : {}),
         ...(Number.isFinite(value.retryAt) && value.retryAt >= 0 ? {retryAt:value.retryAt} : {})};
 }
@@ -23,6 +25,7 @@ export function describeIssue(issue) {
     const descriptions = {
         auth:['Provider access was rejected.', 'Open Settings and check the key and model access for this step.'],
         permission:['Microphone access was not granted.', 'Allow microphone access in your browser, then start recording again. You can also upload audio.'],
+        input:[({empty_file:'The selected file is empty.',file_size:'This file exceeds the 20 MiB upload limit.',file_format:'This file type is not supported.',decode:'This browser could not read or decode the audio.',duration:'The audio exceeds the supported duration or channel limits, or its duration could not be read.'})[issue.reason] || 'This audio file could not be prepared.', 'Choose a playable MP3 or WAV file, at most 20 MiB and 10 minutes, with mono or stereo audio. Convert or split the original file if needed, then upload again.'],
         quota:['Your provider account has no available quota.', 'Check your provider account or choose another configured provider in Settings before retrying.'],
         rate_limit:['Your provider needs more time before another request.', issue.retryAt ? 'Wait for the countdown, then retry this step.' : 'No retry time was supplied. Check your provider’s limits before trying again.'],
         network:['The provider could not be reached.', 'Check your connection and try again. If other sites work, the provider may be temporarily unavailable.'],
@@ -35,7 +38,7 @@ export function describeIssue(issue) {
     };
     const [detail,next] = descriptions[issue.kind];
     return {title:`${labels[issue.stage]} ${issue.kind === 'cancelled' ? 'paused' : 'needs attention'}`,detail,next,
-        diagnostic:`Step: ${labels[issue.stage]} · ${issue.kind}${issue.status ? ` · HTTP ${issue.status}` : ''} · ${issue.reason}`};
+        diagnostic:`Step: ${labels[issue.stage]}${issue.providerId?` · Provider: ${issue.providerId}`:''} · ${issue.kind}${issue.status ? ` · HTTP ${issue.status}` : ''} · ${issue.reason}`};
 }
 
 export function initProcessingFlow({retry,settings,exportTranscript,cancel}) {
@@ -45,7 +48,7 @@ export function initProcessingFlow({retry,settings,exportTranscript,cancel}) {
         <section id="processing-problem" class="processing-problem" hidden aria-labelledby="processing-problem-title">
         <h2 id="processing-problem-title"></h2><p id="processing-reason"></p><p id="processing-preserved"></p><p id="processing-next"></p>
         <div class="processing-actions"><button id="processing-retry" class="primary-action-btn">Retry this step</button><button id="processing-settings" class="secondary-text-btn">Open Settings</button><button id="processing-export" class="secondary-text-btn">Save transcript</button></div>
-        <p id="processing-wait" role="status"></p><details><summary>Problem details</summary><p id="processing-diagnostic"></p></details></section>
+        <p id="processing-wait" role="status"></p><details><summary>Problem details</summary><p id="processing-diagnostic"></p><button id="processing-copy" class="secondary-text-btn">Copy problem details</button><p id="processing-copy-status" role="status"></p></details></section>
         <button id="processing-cancel" class="secondary-text-btn" hidden>Pause notes generation</button>`;
     section.querySelector('.progress-rule-container').before(host);
     const el = id=>document.getElementById(id); let stage='prepare', timer, currentIssue;
@@ -53,6 +56,10 @@ export function initProcessingFlow({retry,settings,exportTranscript,cancel}) {
     el('processing-settings').addEventListener('click',settings);
     el('processing-export').addEventListener('click',exportTranscript);
     el('processing-cancel').addEventListener('click',cancel);
+    el('processing-copy').addEventListener('click',async()=>{
+        try {await navigator.clipboard.writeText(el('processing-diagnostic').textContent);el('processing-copy-status').textContent='Copied. No keys or lecture text are included.';}
+        catch {el('processing-copy-status').textContent='Copy is unavailable. Select and copy the details above.';}
+    });
     function steps(failed=false) {
         const at=PROCESSING_STAGES.indexOf(stage);
         host.querySelectorAll('[data-step]').forEach((item,i)=>{
@@ -81,6 +88,7 @@ export function initProcessingFlow({retry,settings,exportTranscript,cancel}) {
         el('processing-problem').hidden=false; section.dataset.processingState='failed';
         el('processing-problem-title').textContent=text.title; el('processing-reason').textContent=text.detail;
         el('processing-next').textContent=text.next; el('processing-diagnostic').textContent=text.diagnostic;
+        el('processing-copy-status').textContent='';
         el('processing-preserved').textContent=unsaved?'Some audio exists only in this tab. Keep it open and export retained audio below.'
             :transcriptSaved?(transcriptComplete?'Your completed transcript is saved in this browser. You do not need to upload or transcribe it again.':'Completed transcript sections are saved. The remaining audio still needs transcription.')
             :'Completed audio and text may be available in Saved work below. Keep this tab open until you have checked or exported them.';

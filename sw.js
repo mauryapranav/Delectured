@@ -48,6 +48,7 @@ const URLS_TO_CACHE = [
     './js/providers/index.js',
     './js/providers/groq.js',
     './js/providers/catalog.js',
+    './js/providers/models.js',
     './js/providers/http.js',
     './js/providers/openai-compatible.js',
     './js/providers/openai.js',
@@ -57,6 +58,7 @@ const URLS_TO_CACHE = [
     './js/providers/anthropic.js',
     './js/providers/compatible.js',
     './js/provider-settings.js',
+    './js/model-picker.js',
 ];
 
 self.addEventListener('activate', event => {

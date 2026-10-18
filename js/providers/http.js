@@ -15,7 +15,7 @@ export function parseRetryAfter(value, now = Date.now()) {
 }
 
 // Raw bodies, keys, URLs and prompts never become error messages or diagnostic fields.
-export async function requestJSON(url, {providerId, headers, body, signal, timeoutMs = 120000}) {
+export async function requestJSON(url, {providerId, headers, body, signal, timeoutMs = 120000, method = 'POST'}) {
     throwIfAborted(signal);
     if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new ProviderError('unsupported', 'Invalid request timeout.', {providerId});
     const controller = new AbortController();
@@ -24,7 +24,7 @@ export async function requestJSON(url, {providerId, headers, body, signal, timeo
     let timedOut = false;
     const timer = setTimeout(() => {timedOut = true; controller.abort();}, timeoutMs);
     try {
-        const response = await fetch(url, {method: 'POST', headers, body, signal: controller.signal,
+        const response = await fetch(url, {method, headers, body, signal: controller.signal,
             credentials: 'omit', redirect: 'error', cache: 'no-store', referrerPolicy: 'no-referrer'});
         let data;
         // Read failures are network errors; only JSON syntax failures are response errors.

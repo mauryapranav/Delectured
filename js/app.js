@@ -6,6 +6,7 @@ import { getConfig, setLanguage } from './config.js';
 import {validateProviderConfiguration, getProviderSelection} from './providers/index.js';
 import {initProviderSettings} from './provider-settings.js';
 import {Session} from './session.js';
+import {validateUpload} from './upload.js';
 import { Queue } from './queue.js';
 import {initQueueControls} from './queue-controls.js';
 import {refreshNotesSelection} from './notes-recovery.js';
@@ -36,11 +37,23 @@ let questionController = null;
 let reportActionPending = false;
 let recoveryControls;
 let processingFlow;
+let pendingUpload=null;
 let stopPromise = null;
 let stopMeter = () => {};
 
 // --- Initialization ---
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {void initializeApp().catch(showUnexpectedFailure);});
+// Keep unexpected browser/startup failures visible without exposing exception text.
+function showUnexpectedFailure() {
+    if(document.getElementById('unexpected-failure'))return;
+    const panel=document.createElement('section');panel.id='unexpected-failure';panel.className='processing-problem';panel.setAttribute('role','alert');
+    const heading=document.createElement('h2');heading.textContent='The app could not finish an operation';
+    const text=document.createElement('p');text.textContent='Keep this tab open. Save any available transcript or retained audio before reloading. If this happened when opening the site, try a current browser with site storage enabled. Your saved lectures have not been intentionally deleted.';
+    panel.append(heading,text);(document.querySelector('main')??document.body).prepend(panel);
+}
+window.addEventListener('unhandledrejection',showUnexpectedFailure);
+window.addEventListener('error',showUnexpectedFailure);
+async function initializeApp() {
     switchView(new URL(location.href).searchParams.has('capture') ? 'input-section' : 'welcome-section');
     const busy = () => session.busy || Boolean(reportController) || reportActionPending;
     const shell = initShell({busy});
@@ -135,7 +148,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.warn('Service Worker registration failed:', err);
         });
     }
-});
+}
 
 
 // All route content is composed into the shared shell by the static build.
@@ -205,6 +218,7 @@ function initKeysDrawer() {
             settings.save();
             updateSetupStatus();
             close();
+            if(pendingUpload)void startUpload(pendingUpload);
         } catch (error) {
             alert(`Your settings could not be saved: ${error.message}`);
         }
@@ -301,9 +315,28 @@ async function startRecording() {
     catch (error) {if (error.name === 'AbortError' && !currentLectureId) return; await showProcessingError(error);}
 }
 async function startUpload(file) {
-    if (session.busy || reportController || reportActionPending) return;
+    if (session.busy || reportController || reportActionPending) {notice(file===pendingUpload?'Finish the current work first. Your queued file remains available in Settings.':'Finish the current work first, then select this file again.');return;}
+    pendingUpload=null;document.getElementById('pending-upload-notice')?.remove();document.getElementById('save-keys-btn').textContent='Save settings';
     currentLectureId=null; processingFlow.update('prepare','Checking audio and provider settings…'); switchView('recording-section');
-    try {const id = await session.upload(file, providerOptions()); await generateFinalReport(id);}
+    try {
+        validateUpload(file);
+        let options;
+        try {options=providerOptions();}
+        catch(error) {
+            pendingUpload=file;
+            await showProcessingError(error);
+            document.getElementById('keys-drawer-btn').click();
+            let note=document.getElementById('pending-upload-notice');
+            if(!note){note=document.createElement('p');note.id='pending-upload-notice';note.setAttribute('role','status');document.querySelector('#keys-drawer .drawer-content').prepend(note);}
+            note.textContent=`${file.name}: choose providers, enter their keys and select models. Your file stays in this tab until you save settings. Nothing has been uploaded yet.`;
+            const cancel=document.createElement('button');cancel.type='button';cancel.className='secondary-text-btn';cancel.textContent='Cancel selected file';
+            cancel.addEventListener('click',()=>{pendingUpload=null;note.remove();document.getElementById('save-keys-btn').textContent='Save settings';});note.append(cancel);
+            document.getElementById('save-keys-btn').textContent='Save settings & process file';
+            return;
+        }
+        pendingUpload=null;
+        const id = await session.upload(file, options); await generateFinalReport(id);
+    }
     catch (error) {if (error.name === 'AbortError' && !currentLectureId) return; await showProcessingError(error);}
 }
 function updateTimer() {

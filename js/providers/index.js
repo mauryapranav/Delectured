@@ -23,7 +23,7 @@ export function getProviderSelection(capability, overrides = {}, config = getCon
     if (!getProviderCapabilities(providerId)[capability]) throw new ProviderError('unsupported', 'This provider has no adapter for the requested capability.', {providerId});
     const metadata = getProviderMetadata(providerId);
     const model = overrides.model ?? config.models[providerId][capability];
-    if (typeof model !== 'string' || !model.trim() || /[\r\n]/.test(model)) throw new ProviderError('unsupported', 'Set a model ID for this provider and capability in Keys.', {providerId});
+    if (typeof model !== 'string' || !model.trim() || /\s/.test(model.trim())) throw new ProviderError('unsupported', 'Choose an exact model ID in Settings using Find models & suggest. Display names containing spaces are not model IDs.', {providerId});
     let baseUrl = metadata.baseUrl;
     if (providerId === 'compatible') {
         try { baseUrl = validateBaseUrl(config.compatibleBaseUrl); }

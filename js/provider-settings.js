@@ -2,6 +2,7 @@
 import {getConfig, saveConfig} from './config.js';
 import {listProviders} from './providers/catalog.js';
 import {refreshSelects} from './select-control.js';
+import {attachModelPicker} from './model-picker.js';
 
 export function initProviderSettings() {
     const content = document.querySelector('#keys-drawer .drawer-content');
@@ -50,6 +51,7 @@ export function initProviderSettings() {
     const baseUrl = field(choices, 'Custom API base URL (including /v1 if required)', 'compatible-base-url', 'url');
     const selections = () => ({transcription:document.getElementById('transcription-provider').value,
         completion:document.getElementById('notes-provider').value});
+    const pickers=providers.map(provider=>attachModelPicker(provider,groups.get(provider.id),{baseUrl,selections}));
     function updateFields() {
         const selected = selections();
         for (const provider of providers) {
@@ -61,17 +63,18 @@ export function initProviderSettings() {
         }
         baseUrl.parentElement.hidden = !Object.values(selected).includes('compatible');
     }
-    for (const id of ['transcription-provider','notes-provider']) document.getElementById(id).addEventListener('change',updateFields);
+    for (const id of ['transcription-provider','notes-provider']) document.getElementById(id).addEventListener('change',()=>{pickers.forEach(p=>p.reset());updateFields();});
     baseUrl.addEventListener('input', () => {
         if (baseUrl.value.replace(/\/+$/, '') !== loadedCustomUrl) document.getElementById('key-compatible').value = '';
     });
     const note = document.createElement('p'); note.className = 'drawer-desc';
-    note.textContent = 'Provider requests use your own key and quota. Browser connectivity checked; successful requests still require a valid key and supported model. Custom endpoints are unverified. Gemini audio returns text without timestamps.';
+    note.textContent = 'Enter a key, then use Find models & suggest to avoid typing model names. Suggestions favor known task-compatible models; they are not a guarantee of quality, price or account access. Provider limits apply. Keys stay in this browser and are sent only to the chosen provider. Gemini audio has no timestamps.';
     choices.append(note);
     refreshSelects(choices);
     updateFields();
     return {
         load() {
+            pickers.forEach(p=>p.reset());
             const config = getConfig();
             for (const provider of providers) {
                 document.getElementById(`key-${provider.id}`).value = config.keys[provider.id] || '';
