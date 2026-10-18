@@ -1,5 +1,19 @@
 export const ANALYSIS_LIMITS = Object.freeze({sourceBytes: 5000, packetBytes: 5000, summaryBytes: 2500, requestBytes: 16000});
 export const byteLength = value => new TextEncoder().encode(value).length;
+// Basic JSON Schema types work with Groq's strict decoder. Content budgets and
+// evidence matching remain local checks; schema conformity cannot prove truth.
+const schemaObject = properties => ({type:'object',properties,required:Object.keys(properties),additionalProperties:false});
+const schemaText = {type:'string'};
+const schemaList = items => ({type:'array',items});
+const schemaEvidence = schemaList(schemaObject({sourceId:schemaText,quote:schemaText}));
+export const PACKET_OUTPUT_SCHEMA = schemaObject({
+    notes:schemaText,evidence:schemaEvidence,topics:schemaList(schemaText),
+    concepts:schemaList(schemaObject({term:schemaText,definition:schemaText,evidence:schemaEvidence})),
+    flashcards:schemaList(schemaObject({q:schemaText,a:schemaText,evidence:schemaEvidence})),
+    examSignals:schemaList(schemaObject({label:schemaText,evidence:schemaEvidence})),
+    links:schemaList(schemaObject({from:schemaText,to:schemaText,relation:schemaText,evidence:schemaEvidence})),
+});
+export const OVERVIEW_OUTPUT_SCHEMA = schemaObject({summary:schemaText});
 const object = value => {if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Expected an object.'); return value;};
 const text = (value, max = 2000) => {if (typeof value !== 'string' || !value.trim() || value.length > max) throw new TypeError('Invalid text field.'); return value;};
 const list = (value, max, fn) => {if (!Array.isArray(value) || value.length > max) throw new TypeError('Invalid list field.'); return value.map(fn);};

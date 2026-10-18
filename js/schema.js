@@ -1,6 +1,7 @@
 /** Versioned, text-only permanent lecture format. Unknown fields are never persisted. */
 import {PROVIDER_IDS} from './providers/catalog.js';
 import {validateStudyFields, validateCheckpoint} from './analysis-schema.js';
+import {validateProcessingIssue} from './processing-flow.js';
 export const SCHEMA_VERSION = 2;
 export const LANGUAGES = ['en', 'hi', 'hi-en'];
 export const LECTURE_STATES = ['recording', 'processing', 'ready', 'interrupted', 'failed'];
@@ -96,6 +97,7 @@ export function validateLecture(value, now = new Date().toISOString()) {
         segments: validateSegments(value.segments), analysis: validateAnalysis(value.analysis ?? (legacyAnalysis ? value : {})),
         analysisStatus: choice(value.analysisStatus, ANALYSIS_STATES, 'analysis state', hasAnalysis ? 'ready' : 'pending'),
         ...(value.analysisCheckpoint ? {analysisCheckpoint: validateCheckpoint(value.analysisCheckpoint)} : {}),
+        ...(value.processingIssue ? {processingIssue: validateProcessingIssue(value.processingIssue)} : {}),
         ...(value.providerSelections ? {providerSelections: validateProviderSelections(value.providerSelections)} : {}),
     };
 }

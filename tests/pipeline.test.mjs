@@ -43,6 +43,15 @@ test('partial analysis survives real storage reopen and resumes without repeatin
     assert.equal(restored.analysis.sections.length, 2); assert.equal(restored.analysis.conceptGraph.nodes.length, 1);
     await store.close();
 });
+test('HTTP rejection is preserved without an output repair request', async () => {
+    let calls = 0;
+    const rejection = Object.assign(new Error('Rejected request'), {kind:'response',status:400});
+    await assert.rejects(runPipeline('Valid source words.', () => {}, {selection, complete: async () => {
+        calls++; throw rejection;
+    }}), error => error === rejection);
+    assert.equal(calls,1);
+});
+
 test('malformed output gets exactly one repair and invented evidence is rejected', async () => {
     let calls = 0;
     const result = await runPipeline('Valid source words.', () => {}, {selection, complete: async r => ++calls === 1 ? '{broken' : response(r)});

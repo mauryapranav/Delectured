@@ -30,25 +30,31 @@ const packet = source => {
 };
 let browser;
 try {
-    browser = await chromium.launch({headless:true, executablePath:process.argv[3]});
+    browser = await chromium.launch({headless:true, executablePath:process.argv[3],args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
     const context = await browser.newContext({serviceWorkers:'block', viewport:{width:1440,height:1000}, reducedMotion:'reduce'});
-    const page = await context.newPage(), errors = [], requests = [], missing = [];
+    const page = await context.newPage(), errors = [], requests = [], missing = [], dialogs=[];
     page.on('pageerror', e => errors.push(e.message));
     page.on('response', r => {if (r.url().startsWith(base) && r.status() >= 400) missing.push(r.url());});
-    page.on('dialog', d => d.dismiss());
-    let mode = 'success', failWindow = false;
+    page.on('dialog', d => {dialogs.push(d.message());console.log(`Unexpected browser dialog: ${d.type()}`);return d.dismiss();});
+    let mode = 'success', failWindow = false, held=[], audioCalls=0, audioFailure=false;
     await context.route('**/*', async route => {
         const req = route.request();
         if (req.url().startsWith(base)) return route.continue();
+        if(req.url()==='https://api.groq.com/openai/v1/audio/transcriptions') {
+            audioCalls++;
+            return route.fulfill({status:audioFailure&&audioCalls>1?401:200,contentType:'application/json',body:JSON.stringify(audioFailure&&audioCalls>1?{error:{}}:{text:'Python uses indentation to define blocks.',segments:[]})});
+        }
         if (req.url() !== 'https://api.groq.com/openai/v1/chat/completions') return route.abort();
         const body = req.postDataJSON();
-        assert.equal(body.response_format?.type, 'json_object');
         const payload = JSON.parse(body.messages[1].content);
+        assert.equal(body.response_format?.type, payload.question ? 'json_object' : 'json_schema');
+        if(!payload.question)assert.equal(body.response_format.json_schema.strict,true);
         requests.push({model:body.model, payload});
-        const reply = (status, data, headers = {}) => route.fulfill({status, contentType:'application/json', headers, body:JSON.stringify(data)});
+        if(mode==='hold'){held.push(route);return;}
+        const reply = (status, data, headers = {}) => route.fulfill({status, contentType:'application/json', headers:{'access-control-expose-headers':'retry-after',...headers}, body:JSON.stringify(data)});
         if (mode === 'network') return route.abort();
         if (mode === 'envelope') return route.fulfill({status:200, contentType:'text/html', body:'private-api-html'});
-        if (/^http/.test(mode)) return reply(Number(mode.slice(4)), {error:{message:'private-provider-body'}}, {'retry-after':'1'});
+        if (/^http/.test(mode)) return reply(Number(mode.slice(4)), {error:{message:'private-provider-body'}}, {'retry-after':'60'});
         if (failWindow && payload.source?.id === 'w1') return reply(429, {error:{}}, {'retry-after':'1'});
         let content;
         if (payload.question) {
@@ -81,14 +87,96 @@ try {
         mode = scenario; await seed(scenario, 'Python uses indentation to define blocks.');
         const start = requests.length; await retry(scenario);
         await page.waitForFunction(({id,message}) => document.querySelector(`[data-lecture-id="${id}"] [role=status]`)?.textContent.includes(message), {id:scenario,message});
-        assert.equal(requests.length-start, scenario.startsWith('http') && scenario !== 'http400' || scenario === 'network' ? 1 : 2);
+        assert.equal(requests.length-start, scenario.startsWith('http') || scenario === 'network' ? 1 : 2);
         const saved = await page.evaluate(async id => (await import('./js/store.js')).getLecture(id), scenario);
         assert.equal(saved.transcript, 'Python uses indentation to define blocks.');
         assert.equal(saved.analysisStatus, 'failed');
+        assert.equal(saved.processingIssue.stage,'notes');
+        assert.equal(await page.locator('[data-step="transcribe"]').getAttribute('data-state'),'complete');
+        assert.equal(await page.locator('[data-step="notes"]').getAttribute('data-state'),'failed');
+        assert.equal(await page.locator('#stop-record-btn').isVisible(),false);
+        assert.equal(await page.locator('#discard-record-btn').isVisible(),false);
+        assert.equal(await page.locator('#processing-problem').isVisible(),true);
+        assert.match(await page.locator('#processing-preserved').textContent(),/transcript is saved/);
+        if(scenario==='http429') {
+            assert(await page.locator('#processing-retry').isDisabled());
+            assert.match(await page.locator('#processing-wait').textContent(),/seconds/);
+        }
+        if(scenario==='evidence') {
+            await page.locator('#processing-settings').click();
+            assert(await page.locator('#keys-drawer.open').isVisible()); await page.keyboard.press('Escape');
+            const exported=page.waitForEvent('download'); await page.locator('#processing-export').click();
+            assert.equal((await exported).suggestedFilename(),'transcript.txt');
+            await page.locator('#processing-flow').screenshot({path:join(tmpdir(),'delectured-processing-desktop.png')});
+            await page.setViewportSize({width:390,height:844});
+            assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+            await page.locator('#processing-flow').screenshot({path:join(tmpdir(),'delectured-processing-mobile.png')});
+            await page.setViewportSize({width:1440,height:1000});
+            await page.reload(); await ready();
+            assert.match(await page.locator(`[data-lecture-id="${scenario}"] [role=status]`).textContent(),/Create study notes needs attention/);
+        }
         assert(!(await page.locator('#recording-caption').textContent()).includes('Repairing'));
         assert(!(await page.locator('body').textContent()).includes('private-'));
         console.log(`PASS ${scenario}: safe error, bounded requests, transcript retained`);
     }
+    mode='hold'; await seed('pause','Python uses indentation.');
+    const pending=page.waitForRequest(r=>r.url().endsWith('/chat/completions'));
+    await retry('pause'); await pending;
+    assert(await page.locator('[data-lecture-id="pause"]').getByRole('button',{name:'Retry after fixing the problem',exact:true}).isDisabled());
+    await page.locator('#processing-cancel').click();
+    await page.waitForFunction(()=>document.querySelector('#processing-problem-title').textContent.includes('paused'));
+    assert.match(await page.locator('#processing-preserved').textContent(),/transcript is saved/);
+    for(const route of held)await route.abort().catch(()=>{}); held=[];
+    await page.locator('[data-lecture-id="pause"]').getByRole('button',{name:'Retry after fixing the problem',exact:true}).waitFor();
+    await page.waitForFunction(()=>!document.querySelector('[data-lecture-id="pause"] button').disabled);
+    console.log('PASS progress UI: inline errors, completed transcription step, settings, transcript export, persisted failure, mobile layout, pause and operation lock');
+    // Fresh upload must handle a cancelled notes request, not only recovered lectures.
+    await page.goto(base+'index.html?capture=1'); await ready();
+    const wav=Buffer.alloc(44+32000); wav.write('RIFF'); wav.writeUInt32LE(wav.length-8,4); wav.write('WAVEfmt ',8);
+    wav.writeUInt32LE(16,16); wav.writeUInt16LE(1,20); wav.writeUInt16LE(1,22); wav.writeUInt32LE(16000,24);
+    wav.writeUInt32LE(32000,28); wav.writeUInt16LE(2,32); wav.writeUInt16LE(16,34); wav.write('data',36); wav.writeUInt32LE(32000,40);
+    mode='hold'; const uploadNotes=page.waitForRequest(r=>r.url().endsWith('/chat/completions'));
+    await page.locator('#file-input').setInputFiles({name:'fresh.wav',mimeType:'audio/wav',buffer:wav}); await uploadNotes;
+    await page.locator('#processing-cancel').click();
+    await page.waitForFunction(()=>document.querySelector('#processing-problem-title').textContent.includes('paused'));
+    for(const route of held)await route.abort().catch(()=>{});held=[];
+    await page.waitForFunction(()=>[...document.querySelectorAll('#queue-recovery button')].filter(b=>b.textContent==='Resume saved work').every(b=>!b.disabled || b.closest('[data-lecture-id]').dataset.lectureId==='http429'));
+    // Real recorder with short test-only chunk boundaries; microphone remains fake.
+    await page.goto(base+'index.html?capture=1'); await ready();
+    await page.evaluate(async()=>{
+        const {Recorder}=await import('./js/recorder.js'); const open=Recorder.prototype.open;
+        Recorder.prototype.open=function(){this.boundaries={targetMs:1000,maxExtraMs:100,overlapMs:100};return open.call(this);};
+    });
+    mode='success';audioCalls=0;audioFailure=true;
+    await page.locator('#start-record-btn').click();
+    await page.waitForFunction(()=>document.querySelector('#processing-problem-title').textContent.includes('Transcribe audio needs attention'));
+    assert(await page.locator('#stop-record-btn').isVisible());
+    assert.match(await page.locator('#recording-caption').textContent(),/microphone is still recording/);
+    assert.match(await page.locator('#processing-preserved').textContent(),/remaining audio still needs transcription/);
+    await page.locator('#stop-record-btn').click();
+    await page.waitForFunction(()=>document.querySelector('#stop-record-btn').hidden && !document.querySelector('#processing-problem').hidden && !document.querySelector('#recording-caption').textContent.includes('microphone is still recording'));
+    await page.waitForFunction(()=>[...document.querySelectorAll('#queue-recovery button')].filter(b=>b.textContent==='Resume saved work').every(b=>!b.disabled || b.closest('[data-lecture-id]').dataset.lectureId==='http429'));
+    audioFailure=false;
+    console.log('PASS fresh capture: upload-note cancellation, partial transcript warning, Stop remains usable during live transcription failure');
+    // A failed audio write must retain RAM audio and leave recovery usable after capture stops.
+    await page.goto(base+'index.html?capture=1'); await ready();
+    await page.evaluate(async()=>{
+        const {Recorder}=await import('./js/recorder.js'); const open=Recorder.prototype.open;
+        Recorder.prototype.open=function(){this.boundaries={targetMs:1000,maxExtraMs:100,overlapMs:100};return open.call(this);};
+        const put=IDBObjectStore.prototype.put;
+        IDBObjectStore.prototype.put=function(...args){
+            if(this.name==='chunks'){IDBObjectStore.prototype.put=put;throw new DOMException('Test storage full','QuotaExceededError');}
+            return put.apply(this,args);
+        };
+    });
+    await page.locator('#start-record-btn').click();
+    await page.waitForFunction(()=>!document.querySelector('#processing-problem').hidden && document.querySelector('#processing-reason').textContent.includes('could not save'));
+    assert.match(await page.locator('#processing-preserved').textContent(),/only in this tab/);
+    await page.locator('#processing-retry').click();
+    await page.locator('#result-section.active-view').waitFor();
+    assert.match(await page.locator('#summary-content').textContent(),/Python uses indentation/);
+    await page.waitForFunction(()=>[...document.querySelectorAll('#queue-recovery button')].filter(b=>b.textContent==='Resume saved work').every(b=>!b.disabled || b.closest('[data-lecture-id]').dataset.lectureId==='http429'));
+    console.log('PASS storage interruption: retained RAM audio can be retried through to saved notes');
     mode='success'; failWindow=true; await seed('final', transcript, true); await retry('final');
     await page.waitForFunction(() => document.querySelector('[data-lecture-id="final"] [role=status]')?.textContent.includes('HTTP 429'));
     let saved = await page.evaluate(async () => (await import('./js/store.js')).getLecture('final'));
@@ -135,7 +223,7 @@ try {
     console.log(`PASS final panel: notes/code, graph, recall, transcript, Q&A, exports, Library, reload, mobile; screenshot ${screenshot}`);
     saved = await page.evaluate(async () => (await import('./js/store.js')).getLecture('final'));
     assert.equal(saved.status,'ready'); assert.equal(saved.analysisStatus,'ready');
-    assert.deepEqual(errors,[]); assert.deepEqual(missing,[]);
+    assert.deepEqual(errors,[]); assert.deepEqual(missing,[]); assert.deepEqual(dialogs,[]);
     await context.close();
     const offline = await browser.newContext({serviceWorkers:'allow'});
     const offlinePage=await offline.newPage();

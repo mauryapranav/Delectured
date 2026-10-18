@@ -4,6 +4,7 @@ import {transcribeAudio, complete, getProviderCapabilities, getProviderSelection
 import {saveConfig, getConfig} from '../js/config.js';
 import {parseRetryAfter, ProviderError, requestJSON} from '../js/providers/http.js';
 import {validateBaseUrl, listProviders} from '../js/providers/catalog.js';
+import {PACKET_OUTPUT_SCHEMA} from '../js/analysis-schema.js';
 let requests, originalFetch;
 beforeEach(() => {
     let saved;
@@ -33,6 +34,19 @@ test('all text adapters normalize results and send only their own key', async ()
             provider.id === 'anthropic' ? `test-${provider.id}` : `Bearer test-${provider.id}`);
         if (provider.id === 'anthropic') assert.equal(request.headers['anthropic-dangerous-direct-browser-access'], 'true');
         assert.equal(JSON.parse(request.body).model, 'account-model');
+    }
+});
+
+test('strict study schema is sent only to supported Groq models', async () => {
+    saveConfig({keys:{groq:'test-key',openai:'test-key'}});
+    for (const [providerId,model,expected] of [['groq','openai/gpt-oss-120b','json_schema'],['groq','openai/gpt-oss-20b','json_schema'],['groq','account-model','json_object'],['openai','openai/gpt-oss-120b','json_object']]) {
+        await complete({providerId,model,systemPrompt:'Extract notes',userPrompt:'source',jsonMode:true,outputSchema:PACKET_OUTPUT_SCHEMA});
+        const format=JSON.parse(requests.at(-1).body).response_format;
+        assert.equal(format.type,expected);
+        if(expected==='json_schema') {
+            assert.equal(format.json_schema.strict,true);
+            assert.deepEqual(format.json_schema.schema,PACKET_OUTPUT_SCHEMA);
+        }
     }
 });
 

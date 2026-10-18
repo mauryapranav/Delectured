@@ -9,6 +9,7 @@ import {Session} from './session.js';
 import { Queue } from './queue.js';
 import {initQueueControls} from './queue-controls.js';
 import {refreshNotesSelection} from './notes-recovery.js';
+import {initProcessingFlow,processingIssue} from './processing-flow.js';
 import { runPipeline } from './pipeline.js';
 import {assembleTranscript} from './transcript.js';
 import * as store from './store.js';
@@ -33,6 +34,7 @@ let reportController = null;
 let questionController = null;
 let reportActionPending = false;
 let recoveryControls;
+let processingFlow;
 let stopPromise = null;
 let stopMeter = () => {};
 
@@ -43,6 +45,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const shell = initShell({busy});
     // 2. Keys Drawer
     const settings = initKeysDrawer();
+    processingFlow = initProcessingFlow({settings:settings.open,
+        retry:()=>recoveryControls.retry(currentLectureId), cancel:()=>reportController?.abort(),
+        exportTranscript:async()=>{
+            try {const lecture=await store.getLecture(currentLectureId); if(lecture?.transcript)downloadText(lecture.transcript,'transcript.txt','text/plain;charset=utf-8');}
+            catch {notice('The saved transcript could not be read. Keep this tab open.');}
+        }});
     updateSetupStatus();
 
     // 3. Language Selector
@@ -54,21 +62,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('discard-record-btn')?.addEventListener('click', () => discardRecording().catch(showProcessingError));
     recoveryControls = initQueueControls(queue, {
         beforeRetry: async id => {
-            if (reportController) throw Object.assign(new Error('Wait for the current report or discard it first.'), {kind: 'blocked'});
+            if (reportController || reportActionPending) throw Object.assign(new Error('A step is already running. Wait for it to finish or pause notes generation.'), {kind: 'blocked'});
             if (session.busy && (session.active?.id !== id || session.active.state !== 'interrupted')) throw Object.assign(new Error('Stop the current session before recovery.'), {kind: 'blocked'});
+            reportActionPending=true;
             currentLectureId = id; switchView('recording-section');
+            processingFlow.update('transcribe','Checking saved audio and transcript…');
         },
         recover: (id, options) => session.recover(id, options),
-        recovered: async (id, options) => {
-            try {await generateFinalReport(id, options);}
-            catch (error) {await showProcessingError(error, id); throw error;}
-        },
+        recovered: (id, options) => generateFinalReport(id, options),
+        failed:showProcessingError,
+        settled:()=>{reportActionPending=false;},
         discard: id => id === currentLectureId ? discardRecording() : queue.discard(id),
     });
     queue.subscribe(event => {
         if (event.lectureId !== currentLectureId) return;
+        if (reportController) return;
         if (event.status === 'blocked') {
-            showProcessingError(event.error, event.lectureId); return;
+            showProcessingError(event.error, event.lectureId, 'transcribe'); return;
         }
         const previewId = currentLectureId;
         store.getLecture(previewId).then(saved => {if (previewId === currentLectureId && saved?.transcript) document.getElementById('live-transcript').textContent = saved.transcript;}).catch(() => {});
@@ -79,6 +89,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('recording-progress-rule').style.width = `${event.total ? event.completed / event.total * 100 : 0}%`;
             caption.innerText = session.active?.state === 'recording' ? 'Recording… Completed transcript sections are saved.' : 'Preparing your saved transcript…';
         }
+        if(session.active?.state !== 'recording')processingFlow.update('transcribe',caption.innerText);
     });
     await recoveryControls.refresh().catch(() => {});
     
@@ -275,16 +286,22 @@ function onSessionState(event) {
     }
     document.getElementById('recording-title').textContent = event.state === 'recording' ? 'Recording lecture' : ['starting','uploading'].includes(event.state) ? 'Preparing your lecture' : 'Bringing it together';
     document.getElementById('stop-record-btn').disabled = ['starting', 'uploading', 'processing', 'stopping', 'discarding'].includes(event.state);
+    if(['starting','uploading','recording','stopping','processing','complete'].includes(event.state)) {
+        processingFlow?.update(['starting','uploading','recording'].includes(event.state)?'prepare':'transcribe',caption.innerText,{recording:event.state==='recording'});
+        recoveryControls?.setBusy(true);
+    }
 }
 async function startRecording() {
-    if (session.busy || reportController) return;
+    if (session.busy || reportController || reportActionPending) return;
+    currentLectureId=null; processingFlow.update('prepare','Checking microphone and provider settings…'); switchView('recording-section');
     try {await session.start(providerOptions());}
-    catch (error) {if (error.name === 'AbortError') return; await showProcessingError(error); alert(error.message || 'Recording could not start.');}
+    catch (error) {if (error.name === 'AbortError' && !currentLectureId) return; await showProcessingError(error);}
 }
 async function startUpload(file) {
-    if (session.busy || reportController) return;
+    if (session.busy || reportController || reportActionPending) return;
+    currentLectureId=null; processingFlow.update('prepare','Checking audio and provider settings…'); switchView('recording-section');
     try {const id = await session.upload(file, providerOptions()); await generateFinalReport(id);}
-    catch (error) {if (error.name === 'AbortError') return; await showProcessingError(error); alert(error.message);}
+    catch (error) {if (error.name === 'AbortError' && !currentLectureId) return; await showProcessingError(error);}
 }
 function updateTimer() {
     const ms = Date.now() - recordStartTime;
@@ -303,6 +320,7 @@ async function discardRecording() {
     const id = currentLectureId; currentLectureId = null; reportController?.abort();
     if (session.active?.id === id) await session.discard(); else if (id) await queue.discard(id);
     switchView('input-section');
+    recoveryControls?.setBusy(false);
 }
 
 async function generateFinalReport(lectureId = currentLectureId, {retry = false} = {}) {
@@ -310,6 +328,8 @@ async function generateFinalReport(lectureId = currentLectureId, {retry = false}
     if (reportController) throw new Error('A report is already being prepared.');
     const controller = new AbortController(); reportController = controller;
     const signal = controller.signal;
+    processingFlow.update('notes','Checking saved transcript and notes settings…');
+    recoveryControls.setBusy(true);
     const check = () => {if (signal.aborted || lectureId !== currentLectureId) throw new DOMException('Cancelled.', 'AbortError');};
     try {
         if (retry) {await refreshNotesSelection(lectureId); check();}
@@ -321,36 +341,45 @@ async function generateFinalReport(lectureId = currentLectureId, {retry = false}
         const fullText = assembled.text;
         if (!fullText.trim()) throw new Error('No speech was transcribed. Retained audio remains available in recovery.');
         document.getElementById('transcript-content').innerHTML = escapeHTML(fullText);
+        document.getElementById('live-transcript').textContent=fullText;
         let warning = document.getElementById('capture-gap-warning');
         if (!warning) {warning = document.createElement('p'); warning.id = 'capture-gap-warning'; document.getElementById('transcript-content').before(warning);}
         warning.textContent = lecture.captureGaps?.length ? 'This recording was interrupted or only partly imported. Some audio may be missing; gap duration is unknown.' : '';
-        await store.updateLecture(lectureId, {transcript: fullText, segments: assembled.segments, transcriptSource: 'assembled', analysisStatus: 'processing'}, {signal}); check();
+        await store.updateLecture(lectureId, {transcript: fullText, segments: assembled.segments, transcriptSource: 'assembled', analysisStatus: 'processing',processingIssue:undefined}, {signal}); check();
         const results = await runPipeline({transcript: assembled, language: lecture.language}, msg => {
-            if (!signal.aborted && lectureId === currentLectureId) document.getElementById('recording-caption').innerText = msg;
+            if (!signal.aborted && lectureId === currentLectureId) processingFlow.update('notes',msg);
         }, {selection: lecture.providerSelections?.completion ?? getProviderSelection('completion', {providerId: 'groq'}), signal,
             checkpoint: lecture.analysisCheckpoint,
             onCheckpoint: async (analysisCheckpoint, analysis) => {
                 check(); await store.updateLecture(lectureId, {analysisCheckpoint, analysis, analysisStatus: 'partial'}, {signal});
             }});
         check();
+        processingFlow.update('save','Notes checked. Saving your study material in this browser…');
         await store.updateLecture(lectureId, {transcript: fullText, analysis: results, status: 'ready', analysisStatus: 'ready'}, {signal}); check();
         renderLecture(await openLecture(lectureId)); check(); switchView('result-section'); await recoveryControls.refresh();
-    } finally {if (reportController === controller) reportController = null;}
+    } finally {if (reportController === controller) reportController = null; if(!reportActionPending)recoveryControls.setBusy(false);}
 }
 
-async function showProcessingError(error, lectureId = currentLectureId) {
-    const message = error.name === 'AbortError' ? 'Processing cancelled.' : (error.kind ? error.message : 'Processing failed. Your saved audio and transcript are retained.');
-    if (lectureId === currentLectureId) document.getElementById('recording-caption').innerText = message;
+async function showProcessingError(error, lectureId = currentLectureId, stage = processingFlow?.stage??'prepare') {
+    const issue=processingIssue(error,stage);
+    let saved;
     try {
-        const saved = lectureId && await store.getLecture(lectureId);
-        if (saved) await store.updateLecture(lectureId, {status: 'failed', analysisStatus: saved.analysisCheckpoint?.maps.length ? 'partial' : 'failed'});
+        saved = lectureId && await store.getLecture(lectureId);
+        if (saved) await store.updateLecture(lectureId, {status: 'failed', analysisStatus: saved.analysisCheckpoint?.maps.length ? 'partial' : 'failed',processingIssue:issue});
     } catch { /* The original failure remains visible even if storage is unavailable. */ }
+    if (lectureId === currentLectureId) {
+        switchView('recording-section');
+        processingFlow.fail(issue,{transcriptSaved:!!saved?.transcript,transcriptComplete:['notes','save'].includes(stage),
+            unsaved:queue.hasUnsavedAudio(),canRetry:!!saved,recording:!!session.active?.recorder?.isRecording});
+    }
+    recoveryControls?.setBusy((session.busy && session.active?.state !== 'interrupted') || reportActionPending);
+    await recoveryControls?.refresh().catch(()=>{});
 }
 
 
 function initReportControls() {
     const action = (id, fn) => document.getElementById(id)?.addEventListener('click', async () => {
-        try {await fn();} catch (error) {alert(error.message || 'Operation failed.');}
+        try {await fn();} catch (error) {if(id==='regenerate-report')await showProcessingError(error);else notice(error.message || 'Operation failed.');}
     });
     action('export-md', async () => downloadText(exportMarkdown(await openLecture(currentLectureId)), 'lecture.md', 'text/markdown;charset=utf-8'));
     action('export-csv', async () => downloadText(exportAnkiCsv(await openLecture(currentLectureId)), 'flashcards.csv', 'text/csv;charset=utf-8'));
@@ -361,13 +390,14 @@ function initReportControls() {
         if (title !== null) {await renameLecture(lecture.id, title); const updated = await openLecture(lecture.id); if (currentLectureId === lecture.id) renderLecture(updated);}
     });
     action('regenerate-report', async () => {
-        if (session.busy || reportController) throw new Error('Wait for the current work to finish.');
+        if (session.busy || reportController || reportActionPending) {notice('A step is already running. Wait for it to finish.');return;}
         reportActionPending = true;
         try {
+        processingFlow.update('notes','Preparing to regenerate notes from your saved transcript…');
         await refreshNotesSelection(currentLectureId, store, {reset:true});
         switchView('recording-section');
-        try {await generateFinalReport();} catch (error) {await showProcessingError(error); throw error;}
-        } finally {reportActionPending = false;}
+        await generateFinalReport();
+        } finally {reportActionPending = false;recoveryControls.setBusy(false);}
     });
     document.getElementById('lecture-question-form').addEventListener('submit', async event => {
         event.preventDefault(); if (questionController) return;

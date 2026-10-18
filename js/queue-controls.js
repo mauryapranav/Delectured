@@ -1,18 +1,35 @@
 import * as store from './store.js';
+import {describeIssue} from './processing-flow.js';
+import {downloadText} from './exports.js';
 
 // Functional recovery controls only; visual design stays in the final UI layer.
-export function initQueueControls(queue, {beforeRetry = async () => {}, recovered = async () => {}, recover = (id, {retry}) => retry ? queue.retry(id) : queue.resume(id), discard = id => queue.discard(id)} = {}) {
+export function initQueueControls(queue, {beforeRetry = async () => {}, recovered = async () => {}, failed = async () => {}, settled = () => {}, recover = (id, {retry}) => retry ? queue.retry(id) : queue.resume(id), discard = id => queue.discard(id)} = {}) {
     const panel = document.createElement('section');
     panel.id = 'queue-recovery'; panel.hidden = true;
-    const heading = document.createElement('h2'); heading.textContent = 'Unfinished recordings';
+    const heading = document.createElement('h2'); heading.textContent = 'Saved work that needs attention';
     const list = document.createElement('div');
     panel.append(heading, list); document.querySelector('main').append(panel);
     const rows = new Map();
+    let busy=false, cooldownTimer;
+    function setBusy(value) {busy=value; for(const item of rows.values()) item.updateButtons();}
+    async function runRecovery(id,retry) {
+        if(busy || rows.get(id)?.retryAt > Date.now())return;
+        setBusy(true);
+        let accepted=false;
+        try {await beforeRetry(id); accepted=true; await recover(id,{retry}); await recovered(id,{retry});}
+        catch(error) {
+            if(error.kind !== 'blocked')await failed(error,id);
+            const item=rows.get(id);
+            if(item)item.status.textContent=error.kind ? error.message : 'This step could not finish. Check the explanation above; saved work has not been deleted.';
+        } finally {if(accepted)settled(); setBusy(false);}
+    }
     function row(id) {
         if (rows.has(id)) return rows.get(id);
         const element = document.createElement('div'); element.dataset.lectureId = id;
-        const label = document.createElement('p'); label.textContent = id;
+        const label = document.createElement('p'); label.textContent = 'Saved lecture';
+        void store.getLecture(id).then(lecture=>{if(lecture)label.textContent=lecture.title;}).catch(()=>{});
         const status = document.createElement('p'); status.setAttribute('role', 'status');
+        const countdown = document.createElement('p'); countdown.className='quiet';
         const exports = document.createElement('div');
         const processingButtons = [];
         const button = (text, action, processing = false) => {
@@ -21,14 +38,18 @@ export function initQueueControls(queue, {beforeRetry = async () => {}, recovere
                 const disabled = processing ? processingButtons : [b];
                 disabled.forEach(control => {control.disabled = true;});
                 try {await action();} catch (error) {status.textContent = error.kind ? error.message : 'Recovery failed. Retained audio has not been removed.';}
-                finally {disabled.forEach(control => {control.disabled = false;});}
+                finally {if(processing)for(const item of rows.values())item.updateButtons();else b.disabled=false;}
             }); if (processing) processingButtons.push(b); element.append(b); return b;
         };
         const urls = [];
         function clearExports() {urls.splice(0).forEach(url => URL.revokeObjectURL(url)); exports.replaceChildren();}
-        element.append(label, status);
-        button('Resume saved work', async () => {await beforeRetry(id); await recover(id, {retry: false}); await recovered(id, {retry: false});}, true);
-        button('Retry after fixing the problem', async () => {await beforeRetry(id); await recover(id, {retry: true}); await recovered(id, {retry: true});}, true);
+        element.append(label, status,countdown);
+        button('Resume saved work', () => runRecovery(id,false), true);
+        button('Retry after fixing the problem', () => runRecovery(id,true), true);
+        const saveText=button('Save transcript',async()=>{
+            const lecture=await store.getLecture(id);
+            if(lecture?.transcript)downloadText(lecture.transcript,'transcript.txt','text/plain;charset=utf-8');
+        });
         button('Export retained audio', async () => {
             clearExports();
             const chunks = await queue.getRetainedAudio(id);
@@ -42,12 +63,18 @@ export function initQueueControls(queue, {beforeRetry = async () => {}, recovere
             }
             status.textContent = chunks.length ? 'Save each retained part locally. Exporting does not remove it from the queue.' : 'No retained audio remains; successful parts have already become saved text.';
         });
-        button('Discard recording', async () => {
+        const discardButton=button('Discard recording', async () => {
             if (!confirm('Delete this recording, its saved text, and retained audio?')) return;
             await discard(id); clearExports(); element.remove(); rows.delete(id); panel.hidden = !rows.size;
         });
         element.append(exports); list.append(element);
-        const value = {element, label, status, clearExports}; rows.set(id, value); panel.hidden = false; return value;
+        const value = {element, label, status, clearExports, retryAt:0, updateButtons:()=>{
+            for(const b of processingButtons)b.disabled=busy || value.retryAt>Date.now();
+            discardButton.disabled=busy;
+            const seconds=Math.max(0,Math.ceil((value.retryAt-Date.now())/1000));
+            countdown.textContent=seconds?`Retry available in ${seconds} seconds.`:''; countdown.hidden=!seconds;
+        }};
+        value.saveText=saveText; rows.set(id, value); value.updateButtons(); panel.hidden = false; return value;
     }
     queue.subscribe(event => {
         if (event.status === 'discarded') return;
@@ -62,6 +89,7 @@ export function initQueueControls(queue, {beforeRetry = async () => {}, recovere
         if (queue.hasUnsavedAudio()) {event.preventDefault(); event.returnValue = '';}
     });
     async function refresh() {
+        clearInterval(cooldownTimer);
         for (const [id, item] of rows) {
             const saved = await store.getLecture(id);
             if (!saved || saved.status === 'ready') {item.clearExports(); item.element.remove(); rows.delete(id);}
@@ -71,10 +99,17 @@ export function initQueueControls(queue, {beforeRetry = async () => {}, recovere
             const chunks = await store.getAllChunks(lecture.id);
             if (!chunks.some(chunk => chunk.blob) && !['recording', 'processing', 'interrupted', 'failed'].includes(lecture.status)) continue;
             const item = row(lecture.id); item.label.textContent = lecture.title;
-            item.status.textContent = chunks.some(chunk => chunk.blob)
+            item.saveText.hidden=!lecture.transcript;
+            item.retryAt=lecture.processingIssue?.retryAt??0; item.updateButtons();
+            const issue=lecture.processingIssue && describeIssue(lecture.processingIssue);
+            item.status.textContent = issue ? `${issue.title}. ${issue.detail} ${issue.next}` : chunks.some(chunk => chunk.blob)
                 ? 'Saved audio is available. Resume it, retry after fixing a problem, or export it.'
-                : 'This unfinished recording has no retained audio. Resume to use saved text, or discard the draft. An unfinished part may have been lost.';
+                : lecture.transcript ? 'Transcript saved. Resume to create notes without uploading or transcribing again.' : 'No completed transcript is saved. Export any retained audio before closing this tab.';
         }
+        if([...rows.values()].some(item=>item.retryAt>Date.now()))cooldownTimer=setInterval(()=>{
+            for(const item of rows.values())item.updateButtons();
+            if(![...rows.values()].some(item=>item.retryAt>Date.now()))clearInterval(cooldownTimer);
+        },1000);
     }
-    return {refresh};
+    return {refresh,setBusy,retry:id=>runRecovery(id,true)};
 }
