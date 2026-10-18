@@ -19,7 +19,9 @@ function setTab(name, focus = false) {
 }
 function jump(id) {
     setTab('notes'); const target=el(id); if(!target)return;
-    target.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});
+    const panel=el('panel-notes');
+    panel.scrollTo({top:id==='note-overview'?0:panel.scrollTop+target.getBoundingClientRect().top-panel.getBoundingClientRect().top-panel.clientTop-24,
+        behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
     mark(target.closest('.section-block')?.id || id); target.tabIndex=-1; target.focus({preventScroll:true});
 }
 function mark(id) {
@@ -65,9 +67,10 @@ function navigation(sections) {
     observer?.disconnect();
     observer=new IntersectionObserver(()=>{
         if(activeTab!=='notes')return;
-        const reached=sections.filter(([id])=>el(id).getBoundingClientRect().top<=innerHeight*.2);
+        const panel=el('panel-notes');
+        const reached=sections.filter(([id])=>el(id).getBoundingClientRect().top<=panel.getBoundingClientRect().top+panel.clientHeight*.2);
         mark((reached.at(-1)||sections[0])[0]);
-    },{rootMargin:'-5% 0px -65% 0px',threshold:0});
+    },{root:el('panel-notes'),rootMargin:'-5% 0px -65% 0px',threshold:0});
     sections.forEach(([id])=>observer.observe(el(id)));mark(sections[0][0]);
 }
 export function renderResults(data) {

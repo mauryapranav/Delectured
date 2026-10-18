@@ -1721,3 +1721,13 @@ html[data-ink-running]::view-transition-new(root) { z-index:2; }
     .ink-front { display:none!important; }
     body,.folio-page { background-image:none!important; }
 }
+
+/* Keep section navigation inside the reading panel; preserve full printed notes. */
+html { scrollbar-width:thin; scrollbar-color:var(--muted) var(--paper); }
+#panel-notes { max-height:75vh; min-height:min(550px,75vh); overflow-y:auto; scrollbar-width:thin; scrollbar-color:var(--muted) var(--sheet); }
+html::-webkit-scrollbar,#panel-notes::-webkit-scrollbar { width:10px; }
+html::-webkit-scrollbar-track { background:var(--paper); }
+#panel-notes::-webkit-scrollbar-track { background:var(--sheet); }
+html::-webkit-scrollbar-thumb,#panel-notes::-webkit-scrollbar-thumb { background:var(--muted); border:2px solid var(--paper); border-radius:8px; }
+html::-webkit-scrollbar-thumb:hover,#panel-notes::-webkit-scrollbar-thumb:hover { background:var(--accent); }
+@media print { #panel-notes { max-height:none; overflow:visible; } }
