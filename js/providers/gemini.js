@@ -1,6 +1,6 @@
 import {chatCompletion, audioFile, languageCode} from './openai-compatible.js';
 import {requestJSON, normalizeText, throwIfAborted, ProviderError} from './http.js';
-export const complete = request => chatCompletion(request, {jsonFormat: false});
+export const complete = request => chatCompletion(request, {jsonFormat:true, structuredOutput:true});
 export async function transcribeAudio(request) {
     const {blob, language, model, baseUrl, key} = request;
     const format = audioFile(blob).split('.').pop();

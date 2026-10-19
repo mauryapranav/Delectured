@@ -5,7 +5,14 @@ import {runPipeline, splitSources} from '../js/pipeline.js';
 import {byteLength, ANALYSIS_LIMITS, validatePacket} from '../js/analysis-schema.js';
 import {createLectureStore} from '../js/store.js';
 import {createBackup, parseBackup} from '../js/schema.js';
+import {evidenceChoices} from '../js/evidence-repair.js';
 const selection = {providerId: 'groq', model: 'fixture-model', baseUrl: 'https://api.groq.com/openai/v1'};
+test('numbered excerpts bound UTF-8 size and preserve multilingual source order',()=>{
+    const text='हिंदी NLP 🧠 ध्यान और tokens. '.repeat(80);
+    const choices=evidenceChoices({text});
+    assert(choices.every(c=>byteLength(c.quote)<=160));
+    assert.equal(choices.map(c=>c.quote).join(''),text);
+});
 export function packet(source) {
     const quote = source.text.trim().slice(0, 80), evidence = [{sourceId: source.id, quote}];
     return {notes: `Notes ${quote} ${source.text.slice(-80)}`, evidence, topics: ['Topic'], concepts: [{term: 'Term', definition: quote, evidence}],
@@ -44,9 +51,39 @@ test('later sections use their actual source ID and failures identify the sectio
     await assert.rejects(runPipeline(transcript,()=>{},{selection,complete:async r=>{
         const payload=JSON.parse(r.userPrompt);
         if(payload.source.id==='w0')return response(r);
-        assert(r.systemPrompt.includes('"sourceId":"w1"'));
+        if(!payload.excerpts)assert(r.systemPrompt.includes('"sourceId":"w1"'));
         const p=packet(payload.source);p.evidence=[{sourceId:'w1',quote:'invented private quote'}];return JSON.stringify(p);
     }}),e=>e.section===2&&e.totalSections===2&&!e.message.includes('invented private'));
+});
+
+test('failed quote copying repairs using numbered excerpts and saves actual source text',async()=>{
+    let calls=0;
+    const original='LLMs predict the next token. Attention combines query, key and value vectors.';
+    const result=await runPipeline(original,()=>{},{selection,complete:async r=>{
+        calls++;const p=JSON.parse(r.userPrompt),value=packet(p.source);
+        if(calls===1){value.evidence=[{sourceId:'w0',quote:'A paraphrase that was never said'}];}
+        else {
+            assert.equal(p.excerpts[0].quote,original);
+            assert.deepEqual(r.outputSchema.properties.evidence.items.required,['excerptId']);
+            value.evidence=[{excerptId:p.excerpts[0].id}];
+            value.concepts[0].evidence=value.evidence;value.flashcards[0].evidence=value.evidence;
+        }
+        return JSON.stringify(value);
+    }});
+    assert.equal(calls,2);assert.deepEqual(result.sections[0].evidence,[{sourceId:'w0',quote:original}]);
+});
+
+test('numbered repair rejects unknown excerpt IDs and stays within request budgets',async()=>{
+    for(const original of ['\\\\"\n'.repeat(1000),'हिंदी चर्चा। '.repeat(500)]){
+        let calls=0;
+        await assert.rejects(runPipeline(original,()=>{},{selection,complete:async r=>{
+            calls++;assert(byteLength(r.systemPrompt)+byteLength(r.userPrompt)+byteLength(JSON.stringify(r.outputSchema))<=ANALYSIS_LIMITS.requestBytes);
+            const p=JSON.parse(r.userPrompt);
+            const value={notes:'Notes',evidence:p.excerpts?[{excerptId:'missing'}]:[{sourceId:p.source.id,quote:'invented'}],topics:[],concepts:[],flashcards:[],examSignals:[],links:[]};
+            return JSON.stringify(value);
+        }}),/Evidence/);
+        assert.equal(calls,2);
+    }
 });
 test('long multilingual analysis bounds every request and preserves the final section', async () => {
     const text = ('हिंदी code x += 1; explained.\n').repeat(1800) + 'FINAL_IMPORTANT_DETAIL'; const calls = [];

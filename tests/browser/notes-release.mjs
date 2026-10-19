@@ -44,8 +44,13 @@ try {
             audioCalls++;
             return route.fulfill({status:audioFailure&&audioCalls>1?401:200,contentType:'application/json',body:JSON.stringify(audioFailure&&audioCalls>1?{error:{}}:{text:'Python uses indentation to define blocks.',segments:[]})});
         }
-        if (req.url() !== 'https://api.groq.com/openai/v1/chat/completions') return route.abort();
+        if (!['https://api.groq.com/openai/v1/chat/completions','https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'].includes(req.url())) return route.abort();
         const body = req.postDataJSON();
+        if(mode==='numbered-repair') {
+            assert.equal(req.url(),'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions');
+            assert.equal(body.model,'gemini-3.5-flash-lite');
+            assert.equal(req.headers().authorization,'Bearer gemini-fixture');
+        }
         const payload = JSON.parse(body.messages[1].content);
         assert.equal(body.response_format?.type, payload.question ? 'json_object' : 'json_schema');
         if(!payload.question)assert.equal(body.response_format.json_schema.strict,true);
@@ -61,6 +66,15 @@ try {
             content = mode === 'bad-answer' ? '{private-answer' : JSON.stringify({answerable:true, answer:'Python uses indentation.', references:[{id:payload.passages[0].id, quote:'Python uses indentation'}]});
         } else {
             const result = payload.stage === 'extract' ? packet(payload.source) : {summary:'Python uses indentation and functions.'};
+            if (mode === 'numbered-repair' && result.evidence) {
+                if (!payload.excerpts) result.evidence[0].quote = 'A paraphrase absent from the recording';
+                else {
+                    const refs=[{excerptId:payload.excerpts[0].id}];
+                    result.evidence=refs;
+                    for(const key of ['concepts','flashcards','examSignals','links'])for(const item of result[key])item.evidence=refs;
+                    assert.deepEqual(body.response_format.json_schema.schema.properties.evidence.items.required,['excerptId']);
+                }
+            }
             if (mode === 'evidence' && result.evidence) result.evidence[0].quote = 'invented unsupported quote';
             if (mode === 'schema') result.topics = 'invalid list';
             if (mode === 'graph') result.links[0].to = 'Unknown concept';
@@ -69,20 +83,27 @@ try {
         return reply(200, {choices:[{finish_reason:mode === 'truncated' ? 'length' : 'stop', message:{content:mode === 'empty' ? '' : content}}]});
     });
     async function ready() {await page.waitForFunction(() => document.documentElement.dataset.routerReady === 'true');}
-    async function seed(id, text = transcript, legacy = false) {
-        await page.evaluate(async ({id,text,legacy}) => {
+    async function seed(id, text = transcript, legacy = false, gemini = false) {
+        await page.evaluate(async ({id,text,legacy,gemini}) => {
             const store = await import('./js/store.js'), {saveConfig} = await import('./js/config.js');
-            saveConfig({keys:{groq:'fixture-key'}, models:{groq:{completion:'openai/gpt-oss-120b'}}});
+            saveConfig({notesProvider:gemini?'gemini':'groq',keys:{groq:'fixture-key',gemini:'gemini-fixture'}, models:{groq:{completion:'openai/gpt-oss-120b'},gemini:{completion:'gemini-3.5-flash-lite'}}});
             const selection = {providerId:'groq', model:'whisper-large-v3-turbo', baseUrl:'https://api.groq.com/openai/v1'};
             await store.saveLecture({id, title:`Test ${id}`, transcript:text, status:'failed', analysisStatus:'failed',
                 ...(legacy ? {} : {providerSelections:{transcription:selection,completion:{...selection,model:'retired-model'}}})});
-        }, {id,text,legacy});
+        }, {id,text,legacy,gemini});
         await page.reload(); await ready();
     }
     async function retry(id, name = 'Retry after fixing the problem') {
         await page.locator(`[data-lecture-id="${id}"]`).getByRole('button', {name, exact:true}).click();
     }
     await page.goto(base); await ready();
+    mode='numbered-repair';await seed('numbered-repair', 'Python uses indentation to define blocks. Functions use the def keyword. Variables refer to values. '.repeat(1100),false,true);
+    await retry('numbered-repair');await page.locator('#result-section.active-view').waitFor({timeout:60000});
+    const repaired=await page.evaluate(async()=> (await import('./js/store.js')).getLecture('numbered-repair'));
+    assert.equal(repaired.analysis.sections.length,22);
+    assert(repaired.analysis.sections.every(section=>section.evidence.every(ref=>ref.quote && !ref.excerptId)));
+    assert.equal(repaired.status,'ready');
+    console.log('PASS 22-section notes: every quote failure repaired with numbered excerpts, final report saved');
     for (const [scenario, message] of [['http400','HTTP 400'],['http401','HTTP 401'],['http403','HTTP 403'],['http404','HTTP 404'],['http413','HTTP 413'],['http429','HTTP 429'],['http500','HTTP 500'],['network','Could not reach'],['envelope','unreadable API response'],['malformed','invalid JSON'],['schema','Invalid list field'],['graph','unknown concept'],['evidence','Evidence does not occur'],['oversize','byte budget'],['truncated','stopped before completing'],['empty','empty notes response']]) {
         mode = scenario; await seed(scenario, 'Python uses indentation to define blocks.');
         const start = requests.length; await retry(scenario);

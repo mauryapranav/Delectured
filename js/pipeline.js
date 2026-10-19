@@ -1,5 +1,6 @@
 import {complete, getProviderSelection} from './providers/index.js';
 import {throwIfAborted} from './providers/http.js';
+import {evidenceChoices, evidenceRepairSchema, resolveEvidenceChoices, evidenceRepairPrompt} from './evidence-repair.js';
 import {ANALYSIS_LIMITS as LIMITS, byteLength, validatePacket, validateOverview, validateCheckpoint, PACKET_OUTPUT_SCHEMA, OVERVIEW_OUTPUT_SCHEMA} from './analysis-schema.js';
 
 const languages = {en: 'Write English notes.', hi: 'Write Hindi notes in Devanagari.', 'hi-en': 'Write natural Hinglish notes, preserving the source script where useful.'};
@@ -118,20 +119,26 @@ export async function runPipeline(input, onProgress = () => {}, options = {}) {
         throwIfAborted(signal);
     };
     const ask = async (systemPrompt, payload, validator, outputSchema) => {
-        const userPrompt = JSON.stringify(payload);
         let repairReason = '';
         for (let attempt = 0; attempt < 2; attempt++) {
             throwIfAborted(signal);
-            const system = `${rules}\n${languages[language]}\n${systemPrompt}${attempt ? `\nThe previous output failed validation: ${repairReason} Regenerate using the exact schema, size limits and literal evidence quotes.` : ''}`;
-            if (byteLength(system) + byteLength(userPrompt) + byteLength(JSON.stringify(outputSchema)) > LIMITS.requestBytes) throw new Error('Analysis request exceeds its byte budget.');
+            const choices = attempt && payload.stage === 'extract' && repairReason.startsWith('Evidence') ? evidenceChoices(payload.source) : null;
+            const schema = choices ? evidenceRepairSchema(choices) : outputSchema;
+            const system = `${rules}\n${languages[language]}\n${choices ? evidenceRepairPrompt : systemPrompt}${attempt ? `\nThe previous output failed validation: ${repairReason}` : ''}`;
+            let userPrompt = JSON.stringify(choices ? {...payload, excerpts:choices} : payload);
+            const requestSize = () => byteLength(system) + byteLength(userPrompt) + byteLength(JSON.stringify(schema));
+            // The excerpts already contain all source text. Avoid duplicating it
+            // when Unicode/escaping would otherwise exceed the request budget.
+            if (choices && requestSize() > LIMITS.requestBytes) userPrompt = JSON.stringify({stage:payload.stage,source:{id:payload.source.id},excerpts:choices});
+            if (requestSize() > LIMITS.requestBytes) throw new Error('Analysis request exceeds its byte budget.');
             try {
-                const raw = await request({...selection, systemPrompt: system, userPrompt, jsonMode: true, outputSchema, signal});
+                const raw = await request({...selection, systemPrompt: system, userPrompt, jsonMode: true, outputSchema:schema, signal});
                 throwIfAborted(signal);
                 // Bound parsing work, then apply the content budget without indentation overhead.
                 if (byteLength(raw) > LIMITS.packetBytes * 4) throw new TypeError('Response exceeds its byte budget.');
                 const parsed = JSON.parse(raw);
                 if (byteLength(JSON.stringify(parsed)) > LIMITS.packetBytes) throw new TypeError('Response exceeds its byte budget.');
-                return validator(parsed);
+                return validator(choices ? resolveEvidenceChoices(parsed,payload.source,choices) : parsed);
             } catch (error) {
                 throwIfAborted(signal);
                 // A rejected HTTP request has no output to repair. Preserve its status and action.
@@ -139,7 +146,6 @@ export async function runPipeline(input, onProgress = () => {}, options = {}) {
                 if (!(error instanceof SyntaxError || error instanceof TypeError || error.kind === 'response')) throw error;
                 if (attempt) throw Object.assign(new Error(`The provider returned invalid study output twice. ${validationReason(error)} Your saved transcript is retained.`), {kind: 'study_output'});
                 repairReason = validationReason(error);
-                if (repairReason === 'Evidence does not occur in its source.') repairReason += ` Check the ${error.evidenceField} references. Copy quotes directly from source ${payload.source.id}; do not paraphrase, correct spelling, translate, or add ellipses. Use sourceId "${payload.source.id}" for every reference. Omit optional cards, concepts, cues or links if you cannot quote support for them.`;
                 onProgress('Checking the AI notes again. One automatic retry…');
             }
         }

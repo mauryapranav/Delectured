@@ -25,6 +25,7 @@ const URLS_TO_CACHE = [
     './js/library.js',
     './js/config.js',
     './js/pipeline.js',
+    './js/evidence-repair.js',
     './js/transcript.js',
     './js/analysis-schema.js',
     './js/queue.js',

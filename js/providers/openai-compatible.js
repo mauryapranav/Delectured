@@ -15,14 +15,14 @@ export function languageCode(language) {
     // Leave mixed-language speech unforced; do not translate it into Hindi.
     return language === 'hi-en' ? undefined : language;
 }
-export async function chatCompletion(request, {jsonFormat = true} = {}) {
+export async function chatCompletion(request, {jsonFormat = true, structuredOutput = false} = {}) {
     const {key, model, baseUrl, systemPrompt, userPrompt, jsonMode} = request;
     const system = jsonMode ? `${systemPrompt}\nReturn only a valid JSON object, without Markdown fences.` : systemPrompt;
     const payload = {model, messages: [{role: 'system', content: system}, {role: 'user', content: userPrompt}], stream: false};
     if (jsonMode && jsonFormat) payload.response_format = {type: 'json_object'};
-    // Only enable strict schemas for explicitly supported Groq models.
-    if (jsonMode && jsonFormat && request.outputSchema && request.providerId === 'groq'
-        && ['openai/gpt-oss-120b','openai/gpt-oss-20b'].includes(model)) {
+    // Gemini's compatibility API supports schemas; Groq support is model-specific.
+    if (jsonMode && jsonFormat && request.outputSchema && (structuredOutput || request.providerId === 'groq'
+        && ['openai/gpt-oss-120b','openai/gpt-oss-20b'].includes(model))) {
         payload.response_format = {type:'json_schema',json_schema:{name:'study_output',strict:true,schema:request.outputSchema}};
     }
     const data = await requestJSON(`${baseUrl}/chat/completions`, {...request,
