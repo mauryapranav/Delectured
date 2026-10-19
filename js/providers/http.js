@@ -1,8 +1,9 @@
+import {rejectionReason, bodyRetryDelay} from './diagnostics.js';
 export class ProviderError extends Error {
-    constructor(kind, message, {providerId, status, retryAfterMs, retryable = false} = {}) {
+    constructor(kind, message, {providerId, status, retryAfterMs, rejection, retryable = false} = {}) {
         super(message);
         this.name = 'ProviderError';
-        Object.assign(this, {kind, providerId, status, retryAfterMs, retryable});
+        Object.assign(this, {kind, providerId, status, retryAfterMs, rejection, retryable});
     }
 }
 export function aborted() { return new DOMException('Request cancelled.', 'AbortError'); }
@@ -54,12 +55,12 @@ export async function requestJSON(url, {providerId, headers, body, signal, timeo
             const path = new URL(url).pathname;
             const stage = path.endsWith('/audio/transcriptions') ? 'transcription' : path.endsWith('/chat/completions') || path.endsWith('/messages') ? 'notes/answer' : 'API';
             let message = messages[kind];
-            const retryAfterMs = parseRetryAfter(response.headers.get('retry-after'));
+            const retryAfterMs = parseRetryAfter(response.headers.get('retry-after')) ?? bodyRetryDelay(data);
             if (kind === 'rate_limit') message = `The provider rate limit was reached. ${retryAfterMs === undefined ? 'The provider did not supply a retry delay; check your account limits before retrying.' : `Retry after at least ${Math.ceil(retryAfterMs / 1000)} seconds.`}`;
             if (status === 404) message = 'The endpoint or model was not found. Check the selected model ID and your access to it in Settings.';
             if (status === 413) message = 'The request is too large for this provider or account. Reduce the audio chunk or text context size; retrying the same request will not help.';
             message = `${names[providerId] || 'Provider'} ${stage} request failed (HTTP ${status}). ${message}`;
-            throw new ProviderError(kind, message, {providerId, status, retryAfterMs,
+            throw new ProviderError(kind, message, {providerId, status, retryAfterMs, rejection: status === 400 ? rejectionReason(data) : undefined,
                 retryable: kind === 'rate_limit' || kind === 'network'});
         }
         return data;

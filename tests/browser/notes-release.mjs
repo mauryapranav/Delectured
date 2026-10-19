@@ -65,7 +65,7 @@ try {
         if (payload.question) {
             content = mode === 'bad-answer' ? '{private-answer' : JSON.stringify({answerable:true, answer:'Python uses indentation.', references:[{id:payload.passages[0].id, quote:'Python uses indentation'}]});
         } else {
-            const result = payload.stage === 'extract' ? packet(payload.source) : {summary:'Python uses indentation and functions.'};
+            const result = payload.stage === 'extract' ? packet({...payload.source,text:payload.source.text ?? payload.excerpts.map(e=>e.quote).join('')}) : {summary:'Python uses indentation and functions.'};
             if (mode === 'numbered-repair' && result.evidence) {
                 if (!payload.excerpts) result.evidence[0].quote = 'A paraphrase absent from the recording';
                 else {

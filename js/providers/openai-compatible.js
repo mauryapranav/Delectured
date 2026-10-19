@@ -25,8 +25,24 @@ export async function chatCompletion(request, {jsonFormat = true, structuredOutp
         && ['openai/gpt-oss-120b','openai/gpt-oss-20b'].includes(model))) {
         payload.response_format = {type:'json_schema',json_schema:{name:'study_output',strict:true,schema:request.outputSchema}};
     }
-    const data = await requestJSON(`${baseUrl}/chat/completions`, {...request,
-        headers: {Authorization: `Bearer ${key}`, 'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
+    const send = async () => {
+        const body = JSON.stringify(payload);
+        try {return await requestJSON(`${baseUrl}/chat/completions`, {...request,
+            headers: {Authorization: `Bearer ${key}`, 'Content-Type': 'application/json'}, body});}
+        catch(error) {
+            error.requestBytes = new TextEncoder().encode(body).length;
+            error.responseFormat = payload.response_format?.type ?? 'text';
+            throw error;
+        }
+    };
+    let data;
+    try {data = await send();} catch (error) {
+        // Only an explicitly rejected schema gets a different request, once.
+        // Local validation remains mandatory in JSON-object mode.
+        if (request.providerId !== 'gemini' || error.status !== 400 || error.rejection !== 'schema' || payload.response_format?.type !== 'json_schema') throw error;
+        payload.response_format = {type:'json_object'};
+        try {data = await send();} catch (fallback) {fallback.schemaFallback = true; throw fallback;}
+    }
     const choice = data?.choices?.[0];
     if (choice?.finish_reason && choice.finish_reason !== 'stop') throw new ProviderError('response', 'The provider did not finish a complete text response.', request);
     return normalizeText(choice?.message?.content, request);

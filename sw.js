@@ -56,6 +56,7 @@ const URLS_TO_CACHE = [
     './js/providers/catalog.js',
     './js/providers/models.js',
     './js/providers/http.js',
+    './js/providers/diagnostics.js',
     './js/providers/openai-compatible.js',
     './js/providers/openai.js',
     './js/providers/openrouter.js',

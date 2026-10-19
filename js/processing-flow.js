@@ -1,3 +1,4 @@
+import {rejectionLabels} from './providers/diagnostics.js';
 import {PROVIDER_IDS} from './providers/catalog.js';
 import {safeValidationIssue,explainValidation} from './study-validation.js';
 export const PROCESSING_STAGES = Object.freeze(['prepare', 'transcribe', 'notes', 'save']);
@@ -12,12 +13,17 @@ export function processingIssue(error, stage, now = Date.now()) {
     const reason = kind === 'input' && reasons.includes(error.reason) ? error.reason : kind !== 'study_output' ? 'unknown' : message.includes('invalid JSON') ? 'json'
         : message.includes('Evidence') ? 'evidence' : /budget|size/.test(message) ? 'size'
         : message.includes('stopped before') ? 'incomplete' : message.includes('empty notes') ? 'empty' : 'schema';
-    return validateProcessingIssue({stage,kind,reason,status:error.status,providerId:error.providerId,section:error.section,totalSections:error.totalSections,validationIssue:error.validationIssue,
+    return validateProcessingIssue({stage,kind,reason,status:error.status,providerId:error.providerId,section:error.section,totalSections:error.totalSections,validationIssue:error.validationIssue,rejection:error.rejection,schemaFallback:error.schemaFallback,requestBytes:error.requestBytes,responseFormat:error.responseFormat,operation:error.operation,
         retryAt:kind === 'rate_limit' && Number.isFinite(error.retryAfterMs) ? now + Math.max(0,error.retryAfterMs) : undefined});
 }
 export function validateProcessingIssue(value) {
     if (!value || !PROCESSING_STAGES.includes(value.stage) || !kinds.includes(value.kind) || !reasons.includes(value.reason)) throw new TypeError('Invalid processing issue.');
     return {stage:value.stage,kind:value.kind,reason:value.reason,
+        ...(Object.hasOwn(rejectionLabels,value.rejection)?{rejection:value.rejection}:{}),
+        ...(value.schemaFallback === true?{schemaFallback:true}:{}),
+        ...(Number.isSafeInteger(value.requestBytes) && value.requestBytes >= 0 && value.requestBytes <= 10000000?{requestBytes:value.requestBytes}:{}),
+        ...(['json_schema','json_object','text'].includes(value.responseFormat)?{responseFormat:value.responseFormat}:{}),
+        ...(['extract','merge'].includes(value.operation)?{operation:value.operation}:{}),
         ...(safeValidationIssue(value.validationIssue)?{validationIssue:safeValidationIssue(value.validationIssue)}:{}),
         ...(Number.isInteger(value.section) && Number.isInteger(value.totalSections) && value.section > 0 && value.section <= value.totalSections && value.totalSections <= 10000 ? {section:value.section,totalSections:value.totalSections} : {}),
         ...(PROVIDER_IDS.includes(value.providerId)?{providerId:value.providerId}:{}),
@@ -40,9 +46,11 @@ export function describeIssue(issue) {
         unknown:['This step could not finish.', 'Keep this tab open and save any available transcript or audio. Retry the step; if it repeats, use the details below to report the problem.'],
     };
     let [detail,next] = descriptions[issue.kind];
+    if(issue.rejection && Object.hasOwn(rejectionLabels,issue.rejection))detail=rejectionLabels[issue.rejection];
+    if(issue.status===400 && issue.kind==='response')next='Retrying unchanged settings may fail again. Copy Problem details below so the rejected request can be investigated.';
     if(issue.kind==='study_output' && issue.validationIssue)detail=explainValidation(issue.validationIssue);
     return {title:issue.stage === 'notes' && issue.section ? `Notes ${issue.kind === 'cancelled' ? 'paused' : 'stopped'} at section ${issue.section} of ${issue.totalSections}` : `${labels[issue.stage]} ${issue.kind === 'cancelled' ? 'paused' : 'needs attention'}`,detail,next,
-        diagnostic:`Step: ${labels[issue.stage]}${issue.providerId?` · Provider: ${issue.providerId}`:''} · ${issue.kind}${issue.status ? ` · HTTP ${issue.status}` : ''} · ${issue.reason}${issue.validationIssue?` · ${explainValidation(issue.validationIssue)}`:''}`};
+        diagnostic:`Step: ${labels[issue.stage]}${issue.providerId?` · Provider: ${issue.providerId}`:''} · ${issue.kind}${issue.status ? ` · HTTP ${issue.status}` : ''} · ${issue.reason}${issue.operation?` · Operation: ${issue.operation}`:''}${issue.responseFormat?` · Format: ${issue.responseFormat}`:''}${issue.requestBytes!==undefined?` · Request bytes: ${issue.requestBytes}`:''}${issue.rejection?` · Rejected: ${issue.rejection}`:''}${issue.schemaFallback?' · JSON compatibility fallback also failed':''}${issue.validationIssue?` · ${explainValidation(issue.validationIssue)}`:''}`};
 }
 
 export function initProcessingFlow({retry,settings,exportTranscript,cancel}) {
