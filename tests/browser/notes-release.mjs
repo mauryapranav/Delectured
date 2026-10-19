@@ -77,6 +77,7 @@ try {
             }
             if (mode === 'evidence' && result.evidence) result.evidence[0].quote = 'invented unsupported quote';
             if (mode === 'schema') result.topics = 'invalid list';
+            if (mode === 'long-field') result.notes = 'x'.repeat(2200);
             if (mode === 'graph') result.links[0].to = 'Unknown concept';
             content = mode === 'malformed' ? '{private-json' : mode === 'oversize' ? JSON.stringify({notes:'x'.repeat(6000)}) : JSON.stringify(result);
         }
@@ -104,7 +105,7 @@ try {
     assert(repaired.analysis.sections.every(section=>section.evidence.every(ref=>ref.quote && !ref.excerptId)));
     assert.equal(repaired.status,'ready');
     console.log('PASS 22-section notes: every quote failure repaired with numbered excerpts, final report saved');
-    for (const [scenario, message] of [['http400','HTTP 400'],['http401','HTTP 401'],['http403','HTTP 403'],['http404','HTTP 404'],['http413','HTTP 413'],['http429','HTTP 429'],['http500','HTTP 500'],['network','Could not reach'],['envelope','unreadable API response'],['malformed','invalid JSON'],['schema','Invalid list field'],['graph','unknown concept'],['evidence','Evidence does not occur'],['oversize','byte budget'],['truncated','stopped before completing'],['empty','empty notes response']]) {
+    for (const [scenario, message] of [['http400','HTTP 400'],['http401','HTTP 401'],['http403','HTTP 403'],['http404','HTTP 404'],['http413','HTTP 413'],['http429','HTTP 429'],['http500','HTTP 500'],['network','Could not reach'],['envelope','unreadable API response'],['malformed','invalid JSON'],['schema','Invalid list field'],['long-field','2200 characters'],['graph','unknown concept'],['evidence','Evidence does not occur'],['oversize','byte budget'],['truncated','stopped before completing'],['empty','empty notes response']]) {
         mode = scenario; await seed(scenario, 'Python uses indentation to define blocks.');
         const start = requests.length; await retry(scenario);
         await page.waitForFunction(({id,message}) => document.querySelector(`[data-lecture-id="${id}"] [role=status]`)?.textContent.includes(message), {id:scenario,message});
@@ -122,6 +123,10 @@ try {
         if(scenario==='http429') {
             assert(await page.locator('#processing-retry').isDisabled());
             assert.match(await page.locator('#processing-wait').textContent(),/seconds/);
+        }
+        if(scenario==='long-field') {
+            assert.match(await page.locator('#processing-reason').textContent(),/2200 characters.*2000/);
+            assert.match(await page.locator('#processing-diagnostic').textContent(),/2200 characters/);
         }
         if(scenario==='evidence') {
             await page.locator('#processing-settings').click();

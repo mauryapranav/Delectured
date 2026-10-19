@@ -1,5 +1,6 @@
 import {complete, getProviderSelection} from './providers/index.js';
 import {throwIfAborted} from './providers/http.js';
+import {safeValidationIssue, explainValidation, geminiStudySchema} from './study-validation.js';
 import {evidenceChoices, evidenceRepairSchema, resolveEvidenceChoices, evidenceRepairPrompt} from './evidence-repair.js';
 import {ANALYSIS_LIMITS as LIMITS, byteLength, validatePacket, validateOverview, validateCheckpoint, PACKET_OUTPUT_SCHEMA, OVERVIEW_OUTPUT_SCHEMA} from './analysis-schema.js';
 
@@ -10,6 +11,7 @@ const validationReasons = new Set(['Expected an object.', 'Invalid text field.',
     'Evidence does not occur in its source.', 'Evidence is required.', 'Graph link references an unknown concept.',
     'Study output exceeds its size budget.', 'Overview exceeds its size budget.', 'Response exceeds its byte budget.']);
 function validationReason(error) {
+    if(safeValidationIssue(error.validationIssue))return `${error.message} ${explainValidation(error.validationIssue)}`;
     if (error instanceof SyntaxError || error.kind === 'response' && error.message === 'The provider did not return the requested JSON object.') return 'The response was invalid JSON.';
     if (error.kind === 'response') {
         if (Number.isInteger(error.status) && error.status >= 400 && error.status < 600) return `The provider rejected the notes request (HTTP ${error.status}). Check model support and request settings.`;
@@ -122,8 +124,9 @@ export async function runPipeline(input, onProgress = () => {}, options = {}) {
         let repairReason = '';
         for (let attempt = 0; attempt < 2; attempt++) {
             throwIfAborted(signal);
-            const choices = attempt && payload.stage === 'extract' && repairReason.startsWith('Evidence') ? evidenceChoices(payload.source) : null;
-            const schema = choices ? evidenceRepairSchema(choices) : outputSchema;
+            const choices = attempt && payload.stage === 'extract' ? evidenceChoices(payload.source) : null;
+            const baseSchema = choices ? evidenceRepairSchema(choices) : outputSchema;
+            const schema = selection.providerId === 'gemini' && payload.stage === 'extract' ? geminiStudySchema(baseSchema) : baseSchema;
             const system = `${rules}\n${languages[language]}\n${choices ? evidenceRepairPrompt : systemPrompt}${attempt ? `\nThe previous output failed validation: ${repairReason}` : ''}`;
             let userPrompt = JSON.stringify(choices ? {...payload, excerpts:choices} : payload);
             const requestSize = () => byteLength(system) + byteLength(userPrompt) + byteLength(JSON.stringify(schema));
@@ -144,7 +147,7 @@ export async function runPipeline(input, onProgress = () => {}, options = {}) {
                 // A rejected HTTP request has no output to repair. Preserve its status and action.
                 if (Number.isInteger(error.status) && error.status >= 400) throw error;
                 if (!(error instanceof SyntaxError || error instanceof TypeError || error.kind === 'response')) throw error;
-                if (attempt) throw Object.assign(new Error(`The provider returned invalid study output twice. ${validationReason(error)} Your saved transcript is retained.`), {kind: 'study_output'});
+                if (attempt) throw Object.assign(new Error(`The provider returned invalid study output twice. ${validationReason(error)} Your saved transcript is retained.`), {kind: 'study_output',providerId:selection.providerId,validationIssue:safeValidationIssue(error.validationIssue)});
                 repairReason = validationReason(error);
                 onProgress('Checking the AI notes again. One automatic retry…');
             }

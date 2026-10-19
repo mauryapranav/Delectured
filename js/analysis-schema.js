@@ -1,3 +1,4 @@
+import {diagnosePacket} from './study-validation.js';
 export const ANALYSIS_LIMITS = Object.freeze({sourceBytes: 5000, packetBytes: 5000, summaryBytes: 2500, requestBytes: 16000});
 export const byteLength = value => new TextEncoder().encode(value).length;
 // Basic JSON Schema types work with Groq's strict decoder. Content budgets and
@@ -36,6 +37,8 @@ export function validateEvidence(value, sources, field = 'evidence') {
     if (!refs.length) throw new TypeError('Evidence is required.'); return refs;
 }
 export function validatePacket(value, sources) {
+    const issue=diagnosePacket(value);
+    if(issue)throw Object.assign(new TypeError(['too_many','too_few'].includes(issue.code) || ['topics','concepts','flashcards','examSignals','links'].includes(issue.field) ? 'Invalid list field.' : 'Invalid text field.'),{validationIssue:issue});
     object(value);
     const result = {
         notes: text(value.notes), evidence: validateEvidence(value.evidence, sources),

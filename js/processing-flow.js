@@ -1,4 +1,5 @@
 import {PROVIDER_IDS} from './providers/catalog.js';
+import {safeValidationIssue,explainValidation} from './study-validation.js';
 export const PROCESSING_STAGES = Object.freeze(['prepare', 'transcribe', 'notes', 'save']);
 const labels = {prepare:'Prepare audio', transcribe:'Transcribe audio', notes:'Create study notes', save:'Save study material'};
 const kinds = ['auth','quota','rate_limit','network','unsupported','response','study_output','storage','cancelled','permission','input','unknown'];
@@ -11,12 +12,13 @@ export function processingIssue(error, stage, now = Date.now()) {
     const reason = kind === 'input' && reasons.includes(error.reason) ? error.reason : kind !== 'study_output' ? 'unknown' : message.includes('invalid JSON') ? 'json'
         : message.includes('Evidence') ? 'evidence' : /budget|size/.test(message) ? 'size'
         : message.includes('stopped before') ? 'incomplete' : message.includes('empty notes') ? 'empty' : 'schema';
-    return validateProcessingIssue({stage,kind,reason,status:error.status,providerId:error.providerId,section:error.section,totalSections:error.totalSections,
+    return validateProcessingIssue({stage,kind,reason,status:error.status,providerId:error.providerId,section:error.section,totalSections:error.totalSections,validationIssue:error.validationIssue,
         retryAt:kind === 'rate_limit' && Number.isFinite(error.retryAfterMs) ? now + Math.max(0,error.retryAfterMs) : undefined});
 }
 export function validateProcessingIssue(value) {
     if (!value || !PROCESSING_STAGES.includes(value.stage) || !kinds.includes(value.kind) || !reasons.includes(value.reason)) throw new TypeError('Invalid processing issue.');
     return {stage:value.stage,kind:value.kind,reason:value.reason,
+        ...(safeValidationIssue(value.validationIssue)?{validationIssue:safeValidationIssue(value.validationIssue)}:{}),
         ...(Number.isInteger(value.section) && Number.isInteger(value.totalSections) && value.section > 0 && value.section <= value.totalSections && value.totalSections <= 10000 ? {section:value.section,totalSections:value.totalSections} : {}),
         ...(PROVIDER_IDS.includes(value.providerId)?{providerId:value.providerId}:{}),
         ...(Number.isInteger(value.status) && value.status >= 400 && value.status <= 599 ? {status:value.status} : {}),
@@ -37,9 +39,10 @@ export function describeIssue(issue) {
         cancelled:['Notes generation was stopped.', 'You can resume from saved progress when you are ready.'],
         unknown:['This step could not finish.', 'Keep this tab open and save any available transcript or audio. Retry the step; if it repeats, use the details below to report the problem.'],
     };
-    const [detail,next] = descriptions[issue.kind];
+    let [detail,next] = descriptions[issue.kind];
+    if(issue.kind==='study_output' && issue.validationIssue)detail=explainValidation(issue.validationIssue);
     return {title:issue.stage === 'notes' && issue.section ? `Notes ${issue.kind === 'cancelled' ? 'paused' : 'stopped'} at section ${issue.section} of ${issue.totalSections}` : `${labels[issue.stage]} ${issue.kind === 'cancelled' ? 'paused' : 'needs attention'}`,detail,next,
-        diagnostic:`Step: ${labels[issue.stage]}${issue.providerId?` · Provider: ${issue.providerId}`:''} · ${issue.kind}${issue.status ? ` · HTTP ${issue.status}` : ''} · ${issue.reason}`};
+        diagnostic:`Step: ${labels[issue.stage]}${issue.providerId?` · Provider: ${issue.providerId}`:''} · ${issue.kind}${issue.status ? ` · HTTP ${issue.status}` : ''} · ${issue.reason}${issue.validationIssue?` · ${explainValidation(issue.validationIssue)}`:''}`};
 }
 
 export function initProcessingFlow({retry,settings,exportTranscript,cancel}) {
