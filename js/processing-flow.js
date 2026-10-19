@@ -2,7 +2,7 @@ import {PROVIDER_IDS} from './providers/catalog.js';
 export const PROCESSING_STAGES = Object.freeze(['prepare', 'transcribe', 'notes', 'save']);
 const labels = {prepare:'Prepare audio', transcribe:'Transcribe audio', notes:'Create study notes', save:'Save study material'};
 const kinds = ['auth','quota','rate_limit','network','unsupported','response','study_output','storage','cancelled','permission','input','unknown'];
-const reasons = ['json','evidence','size','incomplete','empty','schema','unknown','empty_file','file_size','file_format','decode','duration'];
+const reasons = ['json','evidence','size','incomplete','empty','schema','unknown','empty_file','file_size','file_format','decode','duration','source_required','source_mismatch'];
 export function processingIssue(error, stage, now = Date.now()) {
     let kind = error.name === 'AbortError' ? 'cancelled' : error.name === 'NotAllowedError' ? 'permission'
         : ['QuotaExceededError','UnknownError'].includes(error.name) || stage === 'save' ? 'storage' : error.kind;
@@ -25,7 +25,7 @@ export function describeIssue(issue) {
     const descriptions = {
         auth:['Provider access was rejected.', 'Open Settings and check the key and model access for this step.'],
         permission:['Microphone access was not granted.', 'Allow microphone access in your browser, then start recording again. You can also upload audio.'],
-        input:[({empty_file:'The selected file is empty.',file_size:'This file exceeds the 20 MiB upload limit.',file_format:'This file type is not supported.',decode:'This browser could not read or decode the audio.',duration:'The audio exceeds the supported duration or channel limits, or its duration could not be read.'})[issue.reason] || 'This audio file could not be prepared.', 'Choose a playable MP3 or WAV file, at most 20 MiB and 10 minutes, with mono or stereo audio. Convert or split the original file if needed, then upload again.'],
+        input:[['source_required','source_mismatch'].includes(issue.reason) ? (issue.reason === 'source_mismatch' ? 'The selected file does not match the original recording.' : 'The original recording is needed to finish this upload.') : ({empty_file:'The selected file is empty.',file_size:'This file exceeds the 500 MiB upload limit.',file_format:'This file type is not supported.',decode:'This browser could not read or decode the audio.',duration:'The audio exceeds the supported duration or channel limits, or its duration could not be read.'})[issue.reason] || 'This audio file could not be prepared.', ['source_required','source_mismatch'].includes(issue.reason) ? 'Use Choose original file to continue in Saved work below. Completed transcript sections will be reused.' : 'Choose a playable MP3 or WAV file, at most 500 MiB and two hours, with mono or stereo audio. Convert or split the original file if needed, then upload again.'],
         quota:['Your provider account has no available quota.', 'Check your provider account or choose another configured provider in Settings before retrying.'],
         rate_limit:['Your provider needs more time before another request.', issue.retryAt ? 'Wait for the countdown, then retry this step.' : 'No retry time was supplied. Check your provider’s limits before trying again.'],
         network:['The provider could not be reached.', 'Check your connection and try again. If other sites work, the provider may be temporarily unavailable.'],

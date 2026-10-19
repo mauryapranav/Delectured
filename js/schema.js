@@ -97,9 +97,17 @@ export function validateLecture(value, now = new Date().toISOString()) {
         segments: validateSegments(value.segments), analysis: validateAnalysis(value.analysis ?? (legacyAnalysis ? value : {})),
         analysisStatus: choice(value.analysisStatus, ANALYSIS_STATES, 'analysis state', hasAnalysis ? 'ready' : 'pending'),
         ...(value.analysisCheckpoint ? {analysisCheckpoint: validateCheckpoint(value.analysisCheckpoint)} : {}),
+        ...(value.uploadSource ? {uploadSource: validateUploadSource(value.uploadSource)} : {}),
         ...(value.processingIssue ? {processingIssue: validateProcessingIssue(value.processingIssue)} : {}),
         ...(value.providerSelections ? {providerSelections: validateProviderSelections(value.providerSelections)} : {}),
     };
+}
+function validateUploadSource(value) {
+    object(value, 'upload source');
+    const fingerprint = string(value.fingerprint, 'source fingerprint');
+    if (fingerprint && !/^[a-f0-9]{64}$/.test(fingerprint)) throw new TypeError('Invalid source fingerprint.');
+    if (typeof value.complete !== 'boolean') throw new TypeError('Invalid upload completion.');
+    return {fingerprint, complete:value.complete};
 }
 function validateProviderSelections(value) {
     object(value, 'provider selections');

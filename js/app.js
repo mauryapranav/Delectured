@@ -6,7 +6,7 @@ import { getConfig, setLanguage } from './config.js';
 import {validateProviderConfiguration, getProviderSelection} from './providers/index.js';
 import {initProviderSettings} from './provider-settings.js';
 import {Session} from './session.js';
-import {validateUpload} from './upload.js';
+import {validateUpload, uploadError} from './upload.js';
 import { Queue } from './queue.js';
 import {initQueueControls} from './queue-controls.js';
 import {refreshNotesSelection} from './notes-recovery.js';
@@ -290,6 +290,13 @@ function onSessionState(event) {
     if (event.state === 'starting') {currentLectureId = event.id; document.getElementById('record-timer').textContent = '00:00:00'; document.getElementById('live-transcript').textContent = 'Waiting for the first completed section.'; switchView('recording-section');}
     if (event.id !== currentLectureId) return;
     const caption = document.getElementById('recording-caption');
+    if (event.state === 'upload-progress') {
+        const action = {prepare:'Preparing',compress:'Compressing',transcribe:'Transcribing'}[event.phase];
+        caption.textContent = event.phase === 'verify' ? `Checking the original file: ${Math.round(event.fraction * 100)}%.`
+            : `${action} part ${Math.min(event.index + 1,event.total)} of ${event.total}. Keep this tab open; completed sections are saved.`;
+        processingFlow?.update(event.phase === 'transcribe' ? 'transcribe' : 'prepare',caption.textContent);
+        return;
+    }
     if (event.state === 'recording') {
         stopMeter(); stopMeter = startCaptureMeter(session.active?.recorder, document.getElementById('record-canvas'));
         recordStartTime = Date.now(); clearInterval(recordTimerInterval);
@@ -370,6 +377,7 @@ async function generateFinalReport(lectureId = currentLectureId, {retry = false}
     try {
         if (retry) {await refreshNotesSelection(lectureId); check();}
         const lecture = await store.getLecture(lectureId); check();
+        if (lecture.uploadSource && !lecture.uploadSource.complete) throw uploadError('source_required','Choose the original recording to finish importing before creating notes.');
         const allChunks = await store.getAllChunks(lectureId); check();
         if (allChunks.some(chunk => chunk.status !== 'transcribed')) throw new Error('Transcription is not finished.');
         const assembled = allChunks.length ? assembleTranscript(allChunks, {captureGaps: lecture.captureGaps})
@@ -405,7 +413,7 @@ async function showProcessingError(error, lectureId = currentLectureId, stage = 
     } catch { /* The original failure remains visible even if storage is unavailable. */ }
     if (lectureId === currentLectureId) {
         switchView('recording-section');
-        processingFlow.fail(issue,{transcriptSaved:!!saved?.transcript,transcriptComplete:['notes','save'].includes(stage),
+        processingFlow.fail(issue,{transcriptSaved:!!saved?.transcript,transcriptComplete:['notes','save'].includes(stage) && (!saved?.uploadSource || saved.uploadSource.complete),
             unsaved:queue.hasUnsavedAudio(),canRetry:!!saved,recording:!!session.active?.recorder?.isRecording});
     }
     recoveryControls?.setBusy((session.busy && session.active?.state !== 'interrupted') || reportActionPending);

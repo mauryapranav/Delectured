@@ -39,7 +39,7 @@ test('file failures retain actionable safe categories through the error panel',a
     try{validateUpload(new File(['x'],'lecture.txt'));assert.fail();}catch(e){
         const issue=processingIssue(e,'prepare');assert.equal(issue.reason,'file_format');assert.match(describeIssue(issue).next,/MP3/);
     }
-    await assert.rejects(uploadLecture(new File(['x'],'lecture.wav'),{probe:async()=>20,decode:async()=>{throw new Error('private data');}}),e=>{
+    await assert.rejects(uploadLecture(new File(['x'],'lecture.wav'),{resample:async p=>p,open:async()=>{throw new Error('private data');}}),e=>{
         const issue=processingIssue(e,'prepare');assert.equal(issue.reason,'decode');assert(!JSON.stringify(issue).includes('private'));return true;
     });
 });

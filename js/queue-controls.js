@@ -12,11 +12,11 @@ export function initQueueControls(queue, {beforeRetry = async () => {}, recovere
     const rows = new Map();
     let busy=false, cooldownTimer;
     function setBusy(value) {busy=value; for(const item of rows.values()) item.updateButtons();}
-    async function runRecovery(id,retry) {
+    async function runRecovery(id,retry,file) {
         if(busy || rows.get(id)?.retryAt > Date.now())return;
         setBusy(true);
         let accepted=false;
-        try {await beforeRetry(id); accepted=true; await recover(id,{retry}); await recovered(id,{retry});}
+        try {await beforeRetry(id); accepted=true; await recover(id,{retry,file}); await recovered(id,{retry});}
         catch(error) {
             if(error.kind !== 'blocked')await failed(error,id);
             const item=rows.get(id);
@@ -46,6 +46,11 @@ export function initQueueControls(queue, {beforeRetry = async () => {}, recovere
         element.append(label, status,countdown);
         button('Resume saved work', () => runRecovery(id,false), true);
         button('Retry after fixing the problem', () => runRecovery(id,true), true);
+        const originalInput = document.createElement('input'); originalInput.type='file'; originalInput.accept='.mp3,.m4a,.wav,.mp4'; originalInput.hidden=true;
+        const originalButton = button('Choose original file to continue', () => originalInput.click(), true);
+        originalButton.hidden=true;
+        originalInput.addEventListener('change',()=>{const file=originalInput.files[0]; originalInput.value=''; if(file)void runRecovery(id,true,file);});
+        element.append(originalInput);
         const saveText=button('Save transcript',async()=>{
             const lecture=await store.getLecture(id);
             if(lecture?.transcript)downloadText(lecture.transcript,'transcript.txt','text/plain;charset=utf-8');
@@ -74,7 +79,7 @@ export function initQueueControls(queue, {beforeRetry = async () => {}, recovere
             const seconds=Math.max(0,Math.ceil((value.retryAt-Date.now())/1000));
             countdown.textContent=seconds?`Retry available in ${seconds} seconds.`:''; countdown.hidden=!seconds;
         }};
-        value.saveText=saveText; rows.set(id, value); value.updateButtons(); panel.hidden = false; return value;
+        value.saveText=saveText; value.originalButton=originalButton; rows.set(id, value); value.updateButtons(); panel.hidden = false; return value;
     }
     queue.subscribe(event => {
         if (event.status === 'discarded') return;
@@ -100,11 +105,13 @@ export function initQueueControls(queue, {beforeRetry = async () => {}, recovere
             if (!chunks.some(chunk => chunk.blob) && !['recording', 'processing', 'interrupted', 'failed'].includes(lecture.status)) continue;
             const item = row(lecture.id); item.label.textContent = lecture.title;
             item.saveText.hidden=!lecture.transcript;
+            item.originalButton.hidden=!lecture.uploadSource || lecture.uploadSource.complete;
             item.retryAt=lecture.processingIssue?.retryAt??0; item.updateButtons();
             const issue=lecture.processingIssue && describeIssue(lecture.processingIssue);
             item.status.textContent = issue ? `${issue.title}. ${issue.detail} ${issue.next}` : chunks.some(chunk => chunk.blob)
                 ? 'Saved audio is available. Resume it, retry after fixing a problem, or export it.'
                 : lecture.transcript ? 'Transcript saved. Resume to create notes without uploading or transcribing again.' : 'No completed transcript is saved. Export any retained audio before closing this tab.';
+            if (lecture.uploadSource && !lecture.uploadSource.complete) item.status.textContent += ' Import is unfinished. Choose the original file to continue without repeating completed transcription.';
         }
         if([...rows.values()].some(item=>item.retryAt>Date.now()))cooldownTimer=setInterval(()=>{
             for(const item of rows.values())item.updateButtons();

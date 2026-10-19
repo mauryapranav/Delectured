@@ -33,12 +33,15 @@ test('session prevents double start and records unknown reload gap', async () =>
 });
 test('bounded upload emits independent indexed parts and rejects oversize before decoding', async () => {
     const file = new File(['fixture'], 'audio.mp3'); const chunks = [];
-    const length = 301 * 16000;
-    await uploadLecture(file, {probe: async () => 301, decode: async () => ({duration: 301, sampleRate: 16000, numberOfChannels: 1, length, getChannelData: () => new Float32Array(length)}),
+    const source = {seconds:301, sampleRate:16000, channels:1, close() {}, async *samples() {
+        for(let timestamp=0;timestamp<301;timestamp++)yield {timestamp,audio:{sampleRate:16000,numberOfChannels:1,length:16000,getChannelData:()=>new Float32Array(16000)}};
+    }};
+    await uploadLecture(file, {open:async()=>source,resample:async p=>p,
         encode: async pcm => new Blob([new Uint8Array(pcm.length / 100)]), onChunk: c => chunks.push(c)});
     assert.deepEqual(chunks.map(c => [c.index, c.startMs, c.durationMs]), [[0, 0, 300000], [1, 300000, 1000]]);
-    assert.throws(() => validateUpload(new File([new Uint8Array(UPLOAD_LIMITS.bytes + 1)], 'large.mp3')), /20 MiB/);
-    await assert.rejects(uploadLecture(file, {probe: async () => 601}), /10 minutes/);
+    const oversized=new File(['x'],'large.mp3');Object.defineProperty(oversized,'size',{value:UPLOAD_LIMITS.bytes+1});
+    assert.throws(() => validateUpload(oversized), /500 MiB/);
+    await assert.rejects(uploadLecture(file, {open:async()=>({...source,seconds:7201}),resample:async p=>p}), /two hours/);
     const controller = new AbortController(); controller.abort(); await assert.rejects(uploadLecture(file, {signal: controller.signal}), {name: 'AbortError'});
 });
 test('recovery reserves the session before storage reads and releases it on initialization failure', async () => {

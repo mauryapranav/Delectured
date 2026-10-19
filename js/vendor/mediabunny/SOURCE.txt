@@ -1,0 +1,6 @@
+Mediabunny 1.61.6, by Vanilagy, distributed unchanged under MPL-2.0.
+License: LICENSE in this directory.
+The original source (src/) is included in the pinned npm package:
+https://registry.npmjs.org/mediabunny/-/mediabunny-1.61.6.tgz
+Project: https://github.com/Vanilagy/mediabunny
+Reproduce this bundle with npm ci and npm run vendor:media.

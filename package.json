@@ -6,11 +6,13 @@
     "test": "node --test tests/*.test.mjs",
     "vendor": "node scripts/vendor-idb.mjs",
     "vendor:audio": "node scripts/vendor-lame.mjs",
+    "vendor:media": "node scripts/vendor-media.mjs",
     "build": "node scripts/build-static.mjs"
   },
   "dependencies": {
     "idb": "8.0.4",
-    "lamejs": "1.2.1"
+    "lamejs": "1.2.1",
+    "mediabunny": "1.61.6"
   },
   "devDependencies": {
     "fake-indexeddb": "6.2.5"
