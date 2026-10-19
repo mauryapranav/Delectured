@@ -50,13 +50,12 @@ test('strict study schema is sent only to supported Groq models', async () => {
     }
 });
 
-test('Gemini notes receive the schema and use only the Gemini key',async()=>{
+test('Gemini notes use JSON-object mode without a schema and only the Gemini key',async()=>{
     saveConfig({keys:{groq:'audio-key',gemini:'notes-key'}});
     await complete({providerId:'gemini',model:'gemini-3.5-flash-lite',systemPrompt:'Extract',userPrompt:'Lecture',jsonMode:true,outputSchema:PACKET_OUTPUT_SCHEMA});
     const req=requests.at(-1),body=JSON.parse(req.body);
     assert.equal(req.headers.Authorization,'Bearer notes-key');
-    assert.equal(body.response_format.type,'json_schema');
-    assert.deepEqual(body.response_format.json_schema.schema,PACKET_OUTPUT_SCHEMA);
+    assert.deepEqual(body.response_format,{type:'json_object'});
     assert.equal(body.model,'gemini-3.5-flash-lite');
 });
 

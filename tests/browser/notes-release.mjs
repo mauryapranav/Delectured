@@ -52,8 +52,8 @@ try {
             assert.equal(req.headers().authorization,'Bearer gemini-fixture');
         }
         const payload = JSON.parse(body.messages[1].content);
-        assert.equal(body.response_format?.type, payload.question ? 'json_object' : 'json_schema');
-        if(!payload.question)assert.equal(body.response_format.json_schema.strict,true);
+        assert.equal(body.response_format?.type, payload.question || mode==='numbered-repair' ? 'json_object' : 'json_schema');
+        if(body.response_format.type==='json_schema')assert.equal(body.response_format.json_schema.strict,true);
         requests.push({model:body.model, payload});
         if(mode==='hold'){held.push(route);return;}
         const reply = (status, data, headers = {}) => route.fulfill({status, contentType:'application/json', headers:{'access-control-expose-headers':'retry-after',...headers}, body:JSON.stringify(data)});
@@ -72,7 +72,8 @@ try {
                     const refs=[{excerptId:payload.excerpts[0].id}];
                     result.evidence=refs;
                     for(const key of ['concepts','flashcards','examSignals','links'])for(const item of result[key])item.evidence=refs;
-                    assert.deepEqual(body.response_format.json_schema.schema.properties.evidence.items.required,['excerptId']);
+                    assert.equal(body.response_format.type,'json_object');
+                    assert(body.messages[0].content.includes('excerptId'));
                 }
             }
             if (mode === 'evidence' && result.evidence) result.evidence[0].quote = 'invented unsupported quote';

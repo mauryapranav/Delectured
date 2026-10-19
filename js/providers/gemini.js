@@ -1,6 +1,8 @@
 import {chatCompletion, audioFile, languageCode} from './openai-compatible.js';
 import {requestJSON, normalizeText, throwIfAborted, ProviderError} from './http.js';
-export const complete = request => chatCompletion(request, {jsonFormat:true, structuredOutput:true});
+// Use compatibility JSON mode while schema rejection is investigated.
+// Prompts specify the packet shape; pipeline validation still checks every field.
+export const complete = request => chatCompletion(request, {jsonFormat:true, structuredOutput:false});
 export async function transcribeAudio(request) {
     const {blob, language, model, baseUrl, key} = request;
     const format = audioFile(blob).split('.').pop();
