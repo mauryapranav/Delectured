@@ -15,6 +15,39 @@ const response = request => {
     const p = JSON.parse(request.userPrompt);
     return JSON.stringify(p.stage === 'extract' ? packet(p.source) : {summary: 'Merged overview'});
 };
+
+test('quote whitespace differences preserve the original transcript excerpt', async () => {
+    const original='Attention uses\n  query, key and value vectors.';
+    const result=await runPipeline(original,()=>{},{selection,complete:async r=>{
+        const p=packet(JSON.parse(r.userPrompt).source);
+        p.evidence=[{sourceId:'w0',quote:'Attention uses query, key and value vectors.'}];
+        return JSON.stringify(p);
+    }});
+    assert.equal(result.sections[0].evidence[0].quote,original);
+});
+
+test('quote matching does not alter technical claims or interpret regex characters',()=>{
+    const source={id:'w8',text:'Use x += 1;\n  attention is O(n^2). Do not share keys.'};
+    const candidate=packet(source);
+    candidate.evidence=[{sourceId:'w8',quote:'x += 1; attention is O(n^2).'}];
+    assert.equal(validatePacket(candidate,[source]).evidence[0].quote,'x += 1;\n  attention is O(n^2).');
+    for(const quote of ['attention is O(n).','Do share keys.','Use .*','use x += 1;']){
+        candidate.evidence=[{sourceId:'w8',quote}];
+        assert.throws(()=>validatePacket(candidate,[source]),/Evidence/);
+    }
+    candidate.evidence=[{sourceId:'w0',quote:'Do not share keys.'}];
+    assert.throws(()=>validatePacket(candidate,[source]),/Evidence/);
+});
+
+test('later sections use their actual source ID and failures identify the section safely',async()=>{
+    const transcript='A transformer uses attention. '.repeat(200);
+    await assert.rejects(runPipeline(transcript,()=>{},{selection,complete:async r=>{
+        const payload=JSON.parse(r.userPrompt);
+        if(payload.source.id==='w0')return response(r);
+        assert(r.systemPrompt.includes('"sourceId":"w1"'));
+        const p=packet(payload.source);p.evidence=[{sourceId:'w1',quote:'invented private quote'}];return JSON.stringify(p);
+    }}),e=>e.section===2&&e.totalSections===2&&!e.message.includes('invented private'));
+});
 test('long multilingual analysis bounds every request and preserves the final section', async () => {
     const text = ('हिंदी code x += 1; explained.\n').repeat(1800) + 'FINAL_IMPORTANT_DETAIL'; const calls = [];
     const result = await runPipeline({transcript: text, language: 'hi-en'}, () => {}, {selection, complete: async request => {calls.push(request); return response(request);}});

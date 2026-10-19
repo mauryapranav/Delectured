@@ -139,7 +139,8 @@ export async function runPipeline(input, onProgress = () => {}, options = {}) {
                 if (!(error instanceof SyntaxError || error instanceof TypeError || error.kind === 'response')) throw error;
                 if (attempt) throw Object.assign(new Error(`The provider returned invalid study output twice. ${validationReason(error)} Your saved transcript is retained.`), {kind: 'study_output'});
                 repairReason = validationReason(error);
-                onProgress('Repairing invalid study output once...');
+                if (repairReason === 'Evidence does not occur in its source.') repairReason += ` Check the ${error.evidenceField} references. Copy quotes directly from source ${payload.source.id}; do not paraphrase, correct spelling, translate, or add ellipses. Use sourceId "${payload.source.id}" for every reference. Omit optional cards, concepts, cues or links if you cannot quote support for them.`;
+                onProgress('Checking the AI notes again. One automatic retry…');
             }
         }
     };
@@ -147,7 +148,13 @@ export async function runPipeline(input, onProgress = () => {}, options = {}) {
         throwIfAborted(signal);
         if (checkpoint.maps.some(m => m.id === source.id)) continue;
         onProgress(`Extracting notes ${Number(source.id.slice(1)) + 1}/${windows.length}...`);
-        const packet = await ask(packetPrompt, {stage: 'extract', source: {id: source.id, text: source.text}}, value => validatePacket(value, [source]), PACKET_OUTPUT_SCHEMA);
+        let packet;
+        try {
+            packet = await ask(packetPrompt.replaceAll('"w0"', JSON.stringify(source.id)), {stage: 'extract', source: {id: source.id, text: source.text}}, value => validatePacket(value, [source]), PACKET_OUTPUT_SCHEMA);
+        } catch (error) {
+            error.section = Number(source.id.slice(1)) + 1; error.totalSections = windows.length;
+            throw error;
+        }
         checkpoint.maps.push({id: source.id, packet}); await save();
     }
     let nodes = windows.map(w => ({id: w.id, summary: checkpoint.maps.find(m => m.id === w.id).packet.notes})), level = 0;

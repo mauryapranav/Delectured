@@ -11,12 +11,13 @@ export function processingIssue(error, stage, now = Date.now()) {
     const reason = kind === 'input' && reasons.includes(error.reason) ? error.reason : kind !== 'study_output' ? 'unknown' : message.includes('invalid JSON') ? 'json'
         : message.includes('Evidence') ? 'evidence' : /budget|size/.test(message) ? 'size'
         : message.includes('stopped before') ? 'incomplete' : message.includes('empty notes') ? 'empty' : 'schema';
-    return validateProcessingIssue({stage,kind,reason,status:error.status,providerId:error.providerId,
+    return validateProcessingIssue({stage,kind,reason,status:error.status,providerId:error.providerId,section:error.section,totalSections:error.totalSections,
         retryAt:kind === 'rate_limit' && Number.isFinite(error.retryAfterMs) ? now + Math.max(0,error.retryAfterMs) : undefined});
 }
 export function validateProcessingIssue(value) {
     if (!value || !PROCESSING_STAGES.includes(value.stage) || !kinds.includes(value.kind) || !reasons.includes(value.reason)) throw new TypeError('Invalid processing issue.');
     return {stage:value.stage,kind:value.kind,reason:value.reason,
+        ...(Number.isInteger(value.section) && Number.isInteger(value.totalSections) && value.section > 0 && value.section <= value.totalSections && value.totalSections <= 10000 ? {section:value.section,totalSections:value.totalSections} : {}),
         ...(PROVIDER_IDS.includes(value.providerId)?{providerId:value.providerId}:{}),
         ...(Number.isInteger(value.status) && value.status >= 400 && value.status <= 599 ? {status:value.status} : {}),
         ...(Number.isFinite(value.retryAt) && value.retryAt >= 0 ? {retryAt:value.retryAt} : {})};
@@ -31,13 +32,13 @@ export function describeIssue(issue) {
         network:['The provider could not be reached.', 'Check your connection and try again. If other sites work, the provider may be temporarily unavailable.'],
         unsupported:[issue.status === 404 ? 'The selected model or endpoint is unavailable.' : issue.status === 413 ? 'The provider rejected the request size.' : 'The provider settings or input are not supported.', 'Open Settings to check the provider and model. Saved text does not need to be transcribed again.'],
         response:issue.status ? ['The provider rejected this request.', 'Check the selected model and its supported settings before retrying.'] : ['The provider returned a response this app could not use.', 'Try again once. If it repeats, check the selected model in Settings.'],
-        study_output:[({json:'The notes response was not valid JSON.', evidence:'The notes included evidence that could not be matched to your transcript.', size:'The notes response exceeded the supported size.', incomplete:'The provider stopped before finishing its response.', empty:'The provider returned an empty response.', schema:'The notes did not match the required study format.'})[issue.reason] || 'The notes could not be validated.', 'One automatic repair was already attempted. Retry notes or choose another notes model in Settings.'],
+        study_output:[({json:'The AI returned notes in a format the app could not read.', evidence:'The AI supplied a quote that could not be found in this transcript section. The app stopped instead of showing an unverified quote.', size:'The AI wrote too much for one notes section.', incomplete:'The provider stopped before finishing its response.', empty:'The provider returned an empty response.', schema:'The AI left out required parts of the notes or used the wrong format.'})[issue.reason] || 'The notes could not be validated.', 'The app already asked the AI to try again once. Click Retry notes to continue from saved sections. Your audio does not need to be uploaded again. If the same section fails again, choose another notes model in Settings; changing models restarts notes generation.'],
         storage:['This browser could not save the result.', 'Keep this tab open. Save any available transcript or audio, then free device space before retrying.'],
         cancelled:['Notes generation was stopped.', 'You can resume from saved progress when you are ready.'],
         unknown:['This step could not finish.', 'Keep this tab open and save any available transcript or audio. Retry the step; if it repeats, use the details below to report the problem.'],
     };
     const [detail,next] = descriptions[issue.kind];
-    return {title:`${labels[issue.stage]} ${issue.kind === 'cancelled' ? 'paused' : 'needs attention'}`,detail,next,
+    return {title:issue.stage === 'notes' && issue.section ? `Notes ${issue.kind === 'cancelled' ? 'paused' : 'stopped'} at section ${issue.section} of ${issue.totalSections}` : `${labels[issue.stage]} ${issue.kind === 'cancelled' ? 'paused' : 'needs attention'}`,detail,next,
         diagnostic:`Step: ${labels[issue.stage]}${issue.providerId?` · Provider: ${issue.providerId}`:''} · ${issue.kind}${issue.status ? ` · HTTP ${issue.status}` : ''} · ${issue.reason}`};
 }
 

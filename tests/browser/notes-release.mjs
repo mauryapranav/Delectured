@@ -113,7 +113,8 @@ try {
             await page.locator('#processing-flow').screenshot({path:join(tmpdir(),'delectured-processing-mobile.png')});
             await page.setViewportSize({width:1440,height:1000});
             await page.reload(); await ready();
-            assert.match(await page.locator(`[data-lecture-id="${scenario}"] [role=status]`).textContent(),/Create study notes needs attention/);
+            assert.match(await page.locator(`[data-lecture-id="${scenario}"] [role=status]`).textContent(),/Notes stopped at section 1 of 1/);
+            assert.match(await page.locator(`[data-lecture-id="${scenario}"] [role=status]`).textContent(),/AI supplied a quote/);
         }
         assert(!(await page.locator('#recording-caption').textContent()).includes('Repairing'));
         assert(!(await page.locator('body').textContent()).includes('private-'));

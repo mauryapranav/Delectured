@@ -1,47 +1,38 @@
 # DeLectured
 
-**Every Lecture. Every Word. Structured.**
+Browser-only lecture transcription and study materials. Layers 1–8 are implemented, including the responsive Scholar’s Folio interface. See [frontend verification](docs/layer-8-folio.md) and [functional verification](docs/layers-6-7-release.md) for evidence and remaining limits.
 
-DeLectured is a high-intelligence lecture structuring engine designed to turn raw academic audio into perfectly organized, domain-aware study materials. Unlike generic transcription tools, DeLectured understands the nuances of a classroom environment, including professor emphasis, subject-specific terminology, and the structural flow of a lecture.
-<img width="2502" height="1434" alt="image" src="https://github.com/user-attachments/assets/a7c230be-3818-432d-82e2-e2f51f619756" />
+See the [architecture diagram](ARCHITECTURE.md) for the end-to-end capture, transcription, analysis, storage, and release pipeline.
 
-## The Two-Stage Intelligence Pipeline
+Audio is sent directly to your selected transcription provider; transcript passages go to your notes/Q&A provider. API keys stay in this browser's settings and are sent to the configured provider. Provider usage may cost money; there is no application subscription or backend.
 
-DeLectured operates on a sophisticated processing chain:
+## Storage and recovery
 
-1.  **Whisper Transcription:** Uses `whisper-large-v3` via Groq for near-instant, high-accuracy transcription.
-2.  **Stage 1: Fast Analysis:** A high-speed LLaMA 3.1 pass maps the lecture's domain (e.g., Economics, CS, Law), detects structural breakdown, and identifies explicit emphasis markers.
-3.  **Stage 2: Domain-Aware Structuring:** A second LLaMA 3.1 pass acts as a "Subject Matter Expert" to generate:
-    *   **Insightful Summaries:** Not just compression, but explaining *why* topics matter.
-    *   **Concept Maps:** Key terms with confidence ratings and professor emphasis levels.
-    *   **Lecture DNA:** A visual timeline of concept density throughout the recording.
-    *   **Exam Signals:** Automatic detection of phrases like "Remember this" or "This will be on the test."
-    *   **Active Recall Flashcards:** Interactive Q&A pairs for efficient revision.
+IndexedDB stores lectures and pending audio. Successfully transcribed audio is removed atomically with saving its text. If storage is full, unsaved audio stays in RAM: export it or free space and retry before reloading. RAM audio and unfinished recording buffers do not survive reload. Browser storage can be cleared or evicted; export JSON backups regularly.
 
-## Key Features
+Recording uses silence-aware boundaries near five minutes with bounded hard cuts and explicitly tracked overlap. Interruptions can lose unfinished audio and are reported as gaps. Uploads are limited to 20 MiB and ten minutes; formats depend on browser decoding support.
 
-*   **Multilingual Support:** Optimized for English and Hindi/Hinglish lectures.
-*   **Interactive Annotations:** A built-in chat interface to ask specific questions about the lecture content.
-*   **Intelligence Scores:** Metrics for Lecture Clarity, Content Density, and Professor's Pace.
-*   **Dark Mode & Responsive Design:** A beautiful, modern interface that works on desktop and mobile.
-*   **Privacy First:** API calls are made directly from your browser. No audio data is ever stored on a server.
-*   **Export Options:** Download notes as `.txt` or print a perfectly formatted PDF.
+## Study workflow
 
-## Tech Stack
+The Folio reading page includes Notes, Transcript, Connections and Recall, a topic timeline, recent lectures and an “On this page” index. Light and dark themes use an ink-spread transition; reduced-motion preferences are respected. Recording has its own view with a live audio meter.
 
-*   **Frontend:** Vanilla JS, CSS3 (with custom grain textures and variables), HTML5.
-*   **Intelligence:** Groq Cloud API (Whisper-large-v3, LLaMA-3.1-8b).
-*   **Alternative Implementation:** `backend.py` provides a Gradio-based Python reference implementation.
+The first home page explains the workflow, API-key setup and storage/recovery. Use **Start a lecture** to open Capture, or **Set up your API key** to open provider settings. Saved-report links continue to open the report directly.
 
-## Getting Started
+Open saved reports through Library without provider requests. Search title/transcript/summary, rename, delete, export/import JSON, download Markdown or Anki CSV, and print to PDF. Conflicting imports are rejected unless replacement is explicitly selected. CSV formula-like values receive a leading apostrophe for spreadsheet safety; disable HTML interpretation when importing into Anki.
 
-1.  **API Key:** Obtain a free API key from the [Groq Console](https://console.groq.com/).
-2.  **Launch:**
-    *   **Web App:** Open `index.html` using a local server (like VS Code's Live Server) to avoid CORS issues.
-    *   **Python Version:** Run `pip install gradio groq` then `python backend.py`.
-3.  **Configure:** Click the "API Key" button in the app and paste your key.
-4.  **Process:** Drop an audio file (up to 25MB) and watch the pipeline in action.
+Analysis saves detailed sections and resumable checkpoints. Literal quotes are verified; AI interpretation can still be wrong. Q&A retrieves up to four bounded passages using word overlap and may miss relevant material. No invented quality scores or exam predictions.
 
-## License
+## Development and release
 
-Built for high-performance academic assistance. No audio data is stored. Ever.
+Tested tooling: Node 24.13.0, idb 8.0.4, fake-indexeddb 6.2.5, lamejs 1.2.1.
+
+```sh
+npm ci
+npm test
+npm run build
+python -m http.server 8000 --directory dist
+```
+
+Open localhost:8000. Microphone access needs HTTPS or localhost. Deploy only `dist`, never the repository root. See DEPLOYMENT_FREE.md. The build includes local runtime dependencies and licenses; optional fonts are not required for offline use. Close all app tabs after finishing work to activate an updated offline shell.
+
+52 Node tests pass. The initial Folio gate passed 46 Chromium checks; the subsequent home-page refinement passed 31 targeted Chromium checks, including its expanded eight-group Folio harness. Desktop/mobile-width screenshots and multipage PDF output have been visually inspected. Live authenticated inference, physical microphone behavior and actual mobile browsers remain untested. Existing v2 files are historical references and are excluded from releases.
