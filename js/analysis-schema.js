@@ -1,4 +1,4 @@
-import {diagnosePacket} from './study-validation.js';
+import {diagnosePacket, MAX_SOURCE_REFERENCES} from './study-validation.js';
 export const ANALYSIS_LIMITS = Object.freeze({sourceBytes: 5000, packetBytes: 5000, summaryBytes: 2500, requestBytes: 16000});
 export const byteLength = value => new TextEncoder().encode(value).length;
 // Basic JSON Schema types work with Groq's strict decoder. Content budgets and
@@ -19,7 +19,7 @@ const object = value => {if (!value || typeof value !== 'object' || Array.isArra
 const text = (value, max = 2000) => {if (typeof value !== 'string' || !value.trim() || value.length > max) throw new TypeError('Invalid text field.'); return value;};
 const list = (value, max, fn) => {if (!Array.isArray(value) || value.length > max) throw new TypeError('Invalid list field.'); return value.map(fn);};
 export function validateEvidence(value, sources, field = 'evidence') {
-    const refs = list(value, 4, item => {
+    const refs = list(value, MAX_SOURCE_REFERENCES, item => {
         object(item); const sourceId = text(item.sourceId, 80); let quote = text(item.quote, 300);
         if (sources) {
             const source = sources.find(s => s.id === sourceId);
@@ -48,8 +48,15 @@ export function validatePacket(value, sources) {
         examSignals: list(value.examSignals, 4, item => {object(item); return {label: text(item.label, 200), evidence: validateEvidence(item.evidence, sources, 'examSignals')};}),
         links: list(value.links, 8, item => {object(item); return {from: text(item.from, 100), to: text(item.to, 100), relation: text(item.relation, 150), evidence: validateEvidence(item.evidence, sources, 'links')};}),
     };
+    if(value.omitted !== undefined)result.omitted = list(value.omitted,5,field=>{if(!['topics','concepts','flashcards','examSignals','links'].includes(field))throw new TypeError('Invalid omitted field.');return field;});
     if (result.links.some(link => !result.concepts.some(c => c.term === link.from) || !result.concepts.some(c => c.term === link.to))) throw new TypeError('Graph link references an unknown concept.');
-    if (byteLength(JSON.stringify(result)) > ANALYSIS_LIMITS.packetBytes) throw new TypeError('Study output exceeds its size budget.');
+    // Locally expanded quotes are source data, not newly generated notes.
+    // Account for compact references in the generation budget, with a separate
+    // bound on the stored packet so repeated quotes cannot grow without limit.
+    const compactRefs = refs => refs.map((_,i)=>({ref:i}));
+    const compact = {...result,omitted:undefined,evidence:compactRefs(result.evidence)};
+    for(const field of ['concepts','flashcards','examSignals','links'])compact[field]=result[field].map(item=>({...item,evidence:compactRefs(item.evidence)}));
+    if (byteLength(JSON.stringify(compact)) > ANALYSIS_LIMITS.packetBytes || byteLength(JSON.stringify({...result,omitted:undefined})) > ANALYSIS_LIMITS.packetBytes * 4) throw new TypeError('Study output exceeds its size budget.');
     return result;
 }
 export function validateOverview(value) {
@@ -92,4 +99,28 @@ export function validateStudyFields(value) {
         })};
     }
     return result;
+}
+
+// Generation acceptance is separate from strict persisted-packet validation.
+// Validate core notes first. Optional groups never excuse invalid core evidence.
+export function acceptGeneratedPacket(value, sources) {
+    object(value);
+    const fields=['topics','concepts','flashcards','examSignals','links'];
+    const cleanRefs = refs => {
+        if(!Array.isArray(refs) || refs.length>MAX_SOURCE_REFERENCES)return refs;
+        const seen=new Set();return refs.filter(ref=>{
+            const key=JSON.stringify(ref);if(seen.has(key))return false;seen.add(key);return true;
+        });
+    };
+    let result=validatePacket({notes:value.notes,evidence:cleanRefs(value.evidence),...Object.fromEntries(fields.map(f=>[f,[]]))},sources);
+    const omitted=[];
+    for(const field of fields){
+        if(value[field] === undefined){omitted.push(field);continue;}
+        let items=value[field];
+        if(Array.isArray(items) && items.length<=8)items=items.map(item=>item && typeof item==='object' ? {...item,evidence:cleanRefs(item.evidence)} : item);
+        try {result=validatePacket({...result,[field]:items},sources);}
+        catch {omitted.push(field);}
+    }
+    if(omitted.length)result.omitted=omitted;
+    return validatePacket(result,sources);
 }

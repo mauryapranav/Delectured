@@ -2,7 +2,10 @@
 const string = max => ({type:'text', max});
 const list = (max, item, min = 0) => ({type:'list', max, min, item});
 const object = fields => ({type:'object', fields});
-const evidence = list(4, object({sourceId:string(80), quote:string(300)}), 1);
+// A 5000-byte source cannot supply more than 5000 non-empty excerpts.
+// The request schema uses the actual excerpt count, not this storage guard.
+export const MAX_SOURCE_REFERENCES = 5000;
+const evidence = list(MAX_SOURCE_REFERENCES, object({sourceId:string(80), quote:string(300)}), 1);
 export const PACKET_RULES = object({
     notes:string(2000), evidence, topics:list(8,string(100)),
     concepts:list(8,object({term:string(100),definition:string(600),evidence})),
@@ -26,7 +29,7 @@ export function geminiStudySchema(schema) {
         if(!rule)return;
         if(node.type==='string' && rule.type==='text')node.description=`Non-empty text, at most ${rule.max} characters.`;
         if(node.type==='array' && rule.type==='list') {
-            node.maxItems=rule.max;node.minItems=rule.min;visit(node.items,rule.item);
+            node.maxItems=Math.min(node.maxItems ?? rule.max,rule.max);node.minItems=rule.min;visit(node.items,rule.item);
         }
         if(node.type==='object' && rule.type==='object')for(const [key,child] of Object.entries(node.properties ?? {}))visit(child,rule.fields[key]);
     }

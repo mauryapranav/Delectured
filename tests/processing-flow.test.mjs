@@ -2,6 +2,43 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {processingIssue,describeIssue,validateProcessingIssue} from '../js/processing-flow.js';
 import {validateLecture} from '../js/schema.js';
+import {requestJSON} from '../js/providers/http.js';
+import {runPipeline} from '../js/pipeline.js';
+
+test('timeouts, connection failures and HTTP server errors retain distinct safe explanations',async()=>{
+    const original=globalThis.fetch;
+    try{
+        globalThis.fetch=async()=>{throw new TypeError('private network details');};
+        await assert.rejects(requestJSON('https://example.invalid',{providerId:'gemini'}),e=>{
+            const issue=processingIssue(e,'notes');
+            assert.equal(issue.networkReason,'connection');
+            assert.match(describeIssue(issue).detail,/exact connection failure is unavailable/);return true;
+        });
+        globalThis.fetch=(_,options)=>new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(new Error('private timeout')),{once:true}));
+        await assert.rejects(requestJSON('https://example.invalid',{providerId:'gemini',timeoutMs:5}),e=>{
+            const issue=processingIssue(e,'notes');
+            assert.equal(issue.networkReason,'timeout');assert.match(describeIssue(issue).detail,/timed out/);return true;
+        });
+        const server=processingIssue({kind:'network',status:503},'notes');
+        assert.match(describeIssue(server).detail,/server error.*503/);
+        assert(!describeIssue(server).detail.includes('could not be reached'));
+    }finally{globalThis.fetch=original;}
+});
+
+test('merge connection failures identify the operation even without HTTP status',async()=>{
+    await assert.rejects(runPipeline({transcript:{text:'First. Second.',sources:[{text:'First.'},{text:'Second.'}]}},()=>{},{
+        selection:{providerId:'gemini',model:'fixture',baseUrl:'https://example.invalid'},
+        complete:async r=>{
+            const p=JSON.parse(r.userPrompt);
+            if(p.stage==='merge')throw Object.assign(new Error('private'),{kind:'network',networkReason:'connection'});
+            return JSON.stringify({notes:'Section notes',evidence:[{excerptId:p.excerpts[0].id}]});
+        },
+    }),e=>{
+        const issue=processingIssue(e,'notes');
+        assert.equal(issue.operation,'merge');assert.match(describeIssue(issue).title,/Combining section overviews/);
+        assert(!JSON.stringify(issue).includes('private'));return true;
+    });
+});
 
 test('processing diagnostics preserve stage and retry time without raw provider text',()=>{
     const issue=processingIssue({kind:'rate_limit',status:429,retryAfterMs:75000,message:'secret key or lecture'},'notes',1000);

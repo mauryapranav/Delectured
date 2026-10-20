@@ -176,3 +176,28 @@ export function renderLecture(lecture) {
     el('capture-gap-warning').textContent=lecture.captureGaps?.length?'This recording contains a capture gap. Missing audio cannot be reconstructed.':'';
     renderResults(lecture.analysis);refreshRecent(lecture.id);
 }
+
+export function choosePrintLayout() {
+    let dialog=el('print-options');
+    if(!dialog) {
+        dialog=make('dialog',undefined,'print-options');dialog.id='print-options';
+        dialog.setAttribute('aria-labelledby','print-options-title');
+        const title=make('h2','Save a readable PDF');title.id='print-options-title';
+        const description=make('p','Choose what to include, then select “Save as PDF” in your browser’s print window. Turn off browser headers and footers to omit the website address.');
+        const select=make('select');select.id='print-scope';
+        for(const [value,label] of [['notes','Study notes, concepts and recall'],['full','Full lecture, including transcript']]) {
+            const option=make('option',label);option.value=value;select.append(option);
+        }
+        const label=make('label','Include');label.htmlFor=select.id;
+        const actions=make('div',undefined,'print-options-actions');
+        const cancel=make('button','Cancel'), submit=make('button','Continue to print');
+        cancel.addEventListener('click',()=>dialog.close());
+        submit.addEventListener('click',()=>{
+            document.body.dataset.printScope=select.value;
+            dialog.close();
+            window.print();
+        });
+        actions.append(cancel,submit);dialog.append(title,description,label,select,actions);document.body.append(dialog);
+    }
+    dialog.showModal();
+}

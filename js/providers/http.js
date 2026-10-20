@@ -1,9 +1,10 @@
+import {parseStudyJSON} from '../study-json.js';
 import {rejectionReason, bodyRetryDelay} from './diagnostics.js';
 export class ProviderError extends Error {
-    constructor(kind, message, {providerId, status, retryAfterMs, rejection, retryable = false} = {}) {
+    constructor(kind, message, {providerId, status, retryAfterMs, rejection, networkReason, retryable = false} = {}) {
         super(message);
         this.name = 'ProviderError';
-        Object.assign(this, {kind, providerId, status, retryAfterMs, rejection, retryable});
+        Object.assign(this, {kind, providerId, status, retryAfterMs, rejection, networkReason, retryable});
     }
 }
 export function aborted() { return new DOMException('Request cancelled.', 'AbortError'); }
@@ -33,7 +34,7 @@ export async function requestJSON(url, {providerId, headers, body, signal, timeo
         try { data = JSON.parse(responseText); }
         catch {
             throwIfAborted(signal);
-            if (timedOut) throw new ProviderError('network', 'The provider request timed out.', {providerId, retryable: true});
+            if (timedOut) throw new ProviderError('network', 'The provider request timed out.', {providerId, networkReason:'timeout', retryable: true});
             if (response.ok) throw new ProviderError('response', 'The provider returned an unreadable response.', {providerId});
         }
         throwIfAborted(signal);
@@ -67,7 +68,7 @@ export async function requestJSON(url, {providerId, headers, body, signal, timeo
     } catch (error) {
         throwIfAborted(signal);
         if (error instanceof ProviderError) throw error;
-        throw new ProviderError('network', timedOut ? 'The provider request timed out.' : 'Could not reach the provider. Check the connection and browser access support.', {providerId, retryable: true});
+        throw new ProviderError('network', timedOut ? 'The provider request timed out.' : 'Could not reach the provider. Check the connection and browser access support.', {providerId, networkReason:timedOut?'timeout':'connection', retryable: true});
     } finally {
         clearTimeout(timer);
         signal?.removeEventListener('abort', cancel);
@@ -77,10 +78,8 @@ export async function requestJSON(url, {providerId, headers, body, signal, timeo
 export function normalizeText(text, {providerId, jsonMode = false} = {}) {
     if (typeof text !== 'string' || !text.trim()) throw new ProviderError('response', 'The provider returned no usable text.', {providerId});
     if (jsonMode) {
-        try {
-            const value = JSON.parse(text);
-            if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error();
-        } catch { throw new ProviderError('response', 'The provider did not return the requested JSON object.', {providerId}); }
+        try {return JSON.stringify(parseStudyJSON(text));}
+        catch (cause) {throw Object.assign(new ProviderError('response', 'The provider did not return the requested JSON object.', {providerId}), {outputIssue:cause.outputIssue});}
     }
     return text;
 }

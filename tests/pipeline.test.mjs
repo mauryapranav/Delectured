@@ -18,15 +18,16 @@ export function packet(source) {
     return {notes: `Notes ${quote} ${source.text.slice(-80)}`, evidence, topics: ['Topic'], concepts: [{term: 'Term', definition: quote, evidence}],
         flashcards: [{q: 'What was said?', a: quote, evidence}], examSignals: [], links: []};
 }
+const sourceOf = p => ({...p.source,text:p.source.text ?? p.excerpts.map(e=>e.quote).join('')});
 const response = request => {
     const p = JSON.parse(request.userPrompt);
-    return JSON.stringify(p.stage === 'extract' ? packet(p.source) : {summary: 'Merged overview'});
+    return JSON.stringify(p.stage === 'extract' ? packet(sourceOf(p)) : {summary: 'Merged overview'});
 };
 
 test('quote whitespace differences preserve the original transcript excerpt', async () => {
     const original='Attention uses\n  query, key and value vectors.';
     const result=await runPipeline(original,()=>{},{selection,complete:async r=>{
-        const p=packet(JSON.parse(r.userPrompt).source);
+        const p=packet(sourceOf(JSON.parse(r.userPrompt)));
         p.evidence=[{sourceId:'w0',quote:'Attention uses query, key and value vectors.'}];
         return JSON.stringify(p);
     }});
@@ -52,7 +53,7 @@ test('later sections use their actual source ID and failures identify the sectio
         const payload=JSON.parse(r.userPrompt);
         if(payload.source.id==='w0')return response(r);
         if(!payload.excerpts)assert(r.systemPrompt.includes('"sourceId":"w1"'));
-        const p=packet(payload.source);p.evidence=[{sourceId:'w1',quote:'invented private quote'}];return JSON.stringify(p);
+        const p=packet(sourceOf(payload));p.evidence=[{sourceId:'w1',quote:'invented private quote'}];return JSON.stringify(p);
     }}),e=>e.section===2&&e.totalSections===2&&!e.message.includes('invented private'));
 });
 
@@ -60,7 +61,7 @@ test('failed quote copying repairs using numbered excerpts and saves actual sour
     let calls=0;
     const original='LLMs predict the next token. Attention combines query, key and value vectors.';
     const result=await runPipeline(original,()=>{},{selection,complete:async r=>{
-        calls++;const p=JSON.parse(r.userPrompt),value=packet(p.source);
+        calls++;const p=JSON.parse(r.userPrompt),value=packet(sourceOf(p));
         if(calls===1){value.evidence=[{sourceId:'w0',quote:'A paraphrase that was never said'}];}
         else {
             assert.equal(p.excerpts[0].quote,original);
@@ -95,7 +96,7 @@ test('long multilingual analysis bounds every request and preserves the final se
     // The compact overview may omit a detail; each complete extraction packet remains saved.
     assert(result.sections.at(-1).notes.includes('FINAL_IMPORTANT_DETAIL')); assert.deepEqual(result.scores, {});
     assert.equal(splitSources([{text}]).map(w => w.text).join(''), text);
-    assert(JSON.parse(calls.filter(r => JSON.parse(r.userPrompt).stage === 'extract').at(-1).userPrompt).source.text.includes('FINAL_IMPORTANT_DETAIL'));
+    assert(sourceOf(JSON.parse(calls.filter(r => JSON.parse(r.userPrompt).stage === 'extract').at(-1).userPrompt)).text.includes('FINAL_IMPORTANT_DETAIL'));
 });
 test('partial analysis survives real storage reopen and resumes without repeating completed requests', async () => {
     const store = createLectureStore(crypto.randomUUID()); const text = 'First section. '.repeat(450) + 'Last section.'; let calls = 0;
@@ -128,7 +129,7 @@ test('malformed output gets exactly one repair and invented evidence is rejected
     assert.equal(calls, 2); assert(result.sections.length);
     calls = 0;
     await assert.rejects(runPipeline('Valid source words.', () => {}, {selection, complete: async r => {
-        calls++; const p = packet(JSON.parse(r.userPrompt).source); p.evidence[0].quote = 'invented quote'; return JSON.stringify(p);
+        calls++; const p = packet(sourceOf(JSON.parse(r.userPrompt))); p.evidence[0].quote = 'invented quote'; return JSON.stringify(p);
     }}), /twice/); assert.equal(calls, 2);
     assert.throws(() => validatePacket({notes: 'missing fields'}));
 });
@@ -143,7 +144,7 @@ test('exhausted repair exposes a safe reason instead of hiding the notes failure
     });
     await assert.rejects(runPipeline('Valid source words.', () => {}, {selection,
         complete: async r => {
-            const p = packet(JSON.parse(r.userPrompt).source);
+            const p = packet(sourceOf(JSON.parse(r.userPrompt)));
             p.evidence[0].quote = 'invented quote';
             return JSON.stringify(p);
         }}), error => {
@@ -157,7 +158,7 @@ test('notes request JSON mode and repair includes the failed validation rule', a
     const calls = [];
     await runPipeline('Valid source words.', () => {}, {selection, complete: async r => {
         calls.push(r);
-        const p = packet(JSON.parse(r.userPrompt).source);
+        const p = packet(sourceOf(JSON.parse(r.userPrompt)));
         if (calls.length === 1) p.evidence[0].quote = 'invented';
         return JSON.stringify(p);
     }});
@@ -169,7 +170,7 @@ test('valid pretty-printed JSON uses its content budget, not indentation overhea
     let calls = 0;
     const result = await runPipeline('Valid source words.', () => {}, {selection, complete: async r => {
         calls++;
-        const p = packet(JSON.parse(r.userPrompt).source);
+        const p = packet(sourceOf(JSON.parse(r.userPrompt)));
         p.concepts = Array.from({length:8}, (_, i) => ({...p.concepts[0], term:`Term ${i}`}));
         p.flashcards = Array.from({length:8}, () => p.flashcards[0]);
         const formatted = JSON.stringify(p, null, '\t'.repeat(10));

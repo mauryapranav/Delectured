@@ -216,3 +216,41 @@ body {
     .welcome-opening,.welcome-chapter { min-height:0; }
 }
 html:has(#welcome-section.active-view) { scroll-padding-top:0; }
+
+.print-options { max-width:520px; width:calc(100% - 40px); padding:28px; background:var(--paper); color:var(--ink); border:1px solid var(--line); }
+.print-options::backdrop { background:rgb(0 0 0 / .55); }
+.print-options h2 { margin:0 0 16px; }
+.print-options p { line-height:1.6; margin-bottom:20px; }
+.print-options label { display:block; margin-bottom:8px; }
+.print-options select { width:100%; padding:12px; background:var(--paper); color:var(--ink); border:1px solid var(--line); }
+.print-options-actions { display:flex; justify-content:flex-end; gap:16px; margin-top:24px; }
+.print-options-actions button { padding:12px; }
+
+@media print {
+    @page { size:A4; margin:18mm 17mm 20mm; }
+    .print-options,#app-update,#unexpected-failure { display:none!important; }
+    body { margin:0!important; }
+    .journal-title-block { display:block; border-bottom:1pt solid #888; padding:0 0 12pt; margin:0 0 18pt; break-inside:avoid; }
+    .lecture-heading { font:700 25pt/1.15 Georgia,serif; letter-spacing:0; margin:0 0 10pt; }
+    .lecture-meta { font:9pt/1.5 Arial,sans-serif; gap:12pt; flex-wrap:wrap; }
+    .folio-page,.folio-page[hidden] { font:11pt/1.5 Georgia,serif; width:auto; max-width:none; overflow:visible; }
+    .folio-page h2 { font-size:17pt; line-height:1.25; margin:20pt 0 9pt; break-after:avoid; }
+    .folio-page h3,.folio-page h4 { break-after:avoid; margin:14pt 0 6pt; }
+    .folio-page p,.folio-page li { orphans:3; widows:3; }
+    .note-section,.section-block,.section-source { break-inside:auto; }
+    .note-section { margin:0 0 18pt; padding:0 0 12pt; }
+    .folio-page pre { white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word; border:1px solid #bbb; padding:9pt; font:9pt/1.4 monospace; break-inside:auto; }
+    .folio-page code { overflow-wrap:anywhere; }
+    .folio-page blockquote { border-left:2pt solid #aaa; padding-left:10pt; margin:8pt 0; font-size:9pt; }
+    .folio-page table { width:100%; table-layout:fixed; border-collapse:collapse; font-size:9pt; }
+    .folio-page th,.folio-page td { overflow-wrap:anywhere; border:1px solid #bbb; padding:5pt; }
+    .folio-page thead { display:table-header-group; }
+    .folio-page tr { break-inside:avoid; }
+    #panel-connections,#panel-recall { break-before:auto; }
+    #panel-transcript { break-before:page; }
+    #concept-graph,#concept-detail,.connections-page > .quiet,#panel-recall > .quiet { display:none!important; }
+    #panel-transcript { font-size:10pt; }
+    .recall-card summary { font-size:0; }
+    .recall-card summary::after { content:"Answer"; font-size:9pt; }
+    body[data-print-scope="notes"] #panel-transcript { display:none!important; }
+}

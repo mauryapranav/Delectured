@@ -67,7 +67,8 @@ try {
         } else {
             const result = payload.stage === 'extract' ? packet({...payload.source,text:payload.source.text ?? payload.excerpts.map(e=>e.quote).join('')}) : {summary:'Python uses indentation and functions.'};
             if (mode === 'numbered-repair' && result.evidence) {
-                if (!payload.excerpts) result.evidence[0].quote = 'A paraphrase absent from the recording';
+                assert(payload.excerpts);
+                if (!body.messages[0].content.includes('previous output failed validation')) result.evidence[0].quote = 'A paraphrase absent from the recording';
                 else {
                     const refs=[{excerptId:payload.excerpts[0].id}];
                     result.evidence=refs;
@@ -80,7 +81,7 @@ try {
             if (mode === 'schema') result.topics = 'invalid list';
             if (mode === 'long-field') result.notes = 'x'.repeat(2200);
             if (mode === 'graph') result.links[0].to = 'Unknown concept';
-            content = mode === 'malformed' ? '{private-json' : mode === 'oversize' ? JSON.stringify({notes:'x'.repeat(6000)}) : JSON.stringify(result);
+            content = mode === 'malformed' ? '{private-json' : mode === 'oversize' ? JSON.stringify({notes:'x'.repeat(25000)}) : JSON.stringify(result);
         }
         return reply(200, {choices:[{finish_reason:mode === 'truncated' ? 'length' : 'stop', message:{content:mode === 'empty' ? '' : content}}]});
     });
@@ -106,7 +107,14 @@ try {
     assert(repaired.analysis.sections.every(section=>section.evidence.every(ref=>ref.quote && !ref.excerptId)));
     assert.equal(repaired.status,'ready');
     console.log('PASS 22-section notes: every quote failure repaired with numbered excerpts, final report saved');
-    for (const [scenario, message] of [['http400','HTTP 400'],['http401','HTTP 401'],['http403','HTTP 403'],['http404','HTTP 404'],['http413','HTTP 413'],['http429','HTTP 429'],['http500','HTTP 500'],['network','Could not reach'],['envelope','unreadable API response'],['malformed','invalid JSON'],['schema','Invalid list field'],['long-field','2200 characters'],['graph','unknown concept'],['evidence','Evidence does not occur'],['oversize','byte budget'],['truncated','stopped before completing'],['empty','empty notes response']]) {
+    for (const optionalMode of ['schema','graph']) {
+        mode=optionalMode;await seed(`optional-${mode}`,'Python uses indentation to define blocks.');
+        await retry(`optional-${mode}`);await page.locator('#result-section.active-view').waitFor({timeout:30000});
+        const saved=await page.evaluate(async id=>(await import('./js/store.js')).getLecture(id),`optional-${mode}`);
+        assert.equal(saved.status,'ready');assert(saved.analysis.warnings.some(w=>w.includes('omitted optional')));
+        console.log(`PASS optional ${mode}: validated notes saved with visible omission warning`);
+    }
+    for (const [scenario, message] of [['http400','HTTP 400'],['http401','HTTP 401'],['http403','HTTP 403'],['http404','HTTP 404'],['http413','HTTP 413'],['http429','HTTP 429'],['http500','HTTP 500'],['network','Could not reach'],['envelope','unreadable API response'],['malformed','invalid JSON'],['long-field','2200 characters'],['evidence','Evidence does not occur'],['oversize','byte budget'],['truncated','stopped before completing'],['empty','empty notes response']]) {
         mode = scenario; await seed(scenario, 'Python uses indentation to define blocks.');
         const start = requests.length; await retry(scenario);
         await page.waitForFunction(({id,message}) => document.querySelector(`[data-lecture-id="${id}"] [role=status]`)?.textContent.includes(message), {id:scenario,message});
@@ -249,6 +257,29 @@ try {
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
     const screenshot=join(tmpdir(),'delectured-notes-release.png'); await page.screenshot({path:screenshot,fullPage:true});
     console.log(`PASS final panel: notes/code, graph, recall, transcript, Q&A, exports, Library, reload, mobile; screenshot ${screenshot}`);
+    await page.setViewportSize({width:1440,height:1000});
+    await page.evaluate(()=>{window.print=()=>{window.printRequested=true;};});
+    await page.locator('#export-menu summary').click();
+    await page.locator('[data-export="export-pdf"]').click();
+    await page.locator('#print-options[open]').waitFor();
+    await page.getByRole('button',{name:'Continue to print'}).click();
+    assert.equal(await page.evaluate(()=>window.printRequested),true);
+    await page.emulateMedia({media:'print'});
+    assert.equal(await page.locator('#panel-transcript').isVisible(),false);
+    assert.equal(await page.locator('#panel-recall').isVisible(),true);
+    await page.evaluate(()=>window.dispatchEvent(new Event('beforeprint')));
+    const pdfPath=join(tmpdir(),'delectured-study-notes.pdf');
+    await page.pdf({path:pdfPath,preferCSSPageSize:true,printBackground:false});
+    await page.evaluate(()=>window.dispatchEvent(new Event('afterprint')));
+    await page.emulateMedia({media:'screen'});
+    await page.locator('#export-menu summary').click();
+    await page.locator('[data-export="export-pdf"]').click();
+    await page.locator('#print-scope').selectOption('full');
+    await page.getByRole('button',{name:'Continue to print'}).click();
+    await page.emulateMedia({media:'print'});
+    assert.equal(await page.locator('#panel-transcript').isVisible(),true);
+    await page.emulateMedia({media:'screen'});
+    console.log(`PASS PDF: scope chooser, study notes exclude transcript, full export includes transcript; generated ${pdfPath}`);
     saved = await page.evaluate(async () => (await import('./js/store.js')).getLecture('final'));
     assert.equal(saved.status,'ready'); assert.equal(saved.analysisStatus,'ready');
     assert.deepEqual(errors,[]); assert.deepEqual(missing,[]); assert.deepEqual(dialogs,[]);

@@ -16,7 +16,7 @@ import { runPipeline } from './pipeline.js';
 import {assembleTranscript} from './transcript.js';
 import * as store from './store.js';
 import {escapeHTML} from './safe-render.js';
-import {renderLecture} from './report.js';
+import {renderLecture, choosePrintLayout} from './report.js';
 import {openLecture, renameLecture} from './lectures.js';
 import {exportMarkdown, exportAnkiCsv, downloadText} from './exports.js';
 import {askLecture} from './chat.js';
@@ -54,6 +54,24 @@ function showUnexpectedFailure() {
 window.addEventListener('unhandledrejection',showUnexpectedFailure);
 window.addEventListener('error',showUnexpectedFailure);
 async function initializeApp() {
+    // Source HTML does not contain the composed route shell. Do not let a
+    // navigation hide every view, or initialize controls that are absent.
+    if (!document.getElementById('library-section') || !document.getElementById('guide-section')) {
+        const panel=document.createElement('section');panel.className='processing-problem';panel.setAttribute('role','alert');
+        const heading=document.createElement('h1');heading.textContent='Open the built app to access your lectures';
+        const text=document.createElement('p');text.textContent='This server opened a source page instead of the complete app. Navigation cannot work here. This does not delete browser storage.';
+        const status=document.createElement('p');status.textContent='Checking saved lectures in this browser…';
+        const link=document.createElement('a');link.textContent='Open the complete app';
+        const target=new URL('./dist/index.html',location.href);target.search=location.search;target.hash=location.hash;link.href=target.href;
+        const help=document.createElement('p');help.textContent='For local development, run npm run build first. This link keeps the same browser address and port, so it uses the same saved lectures. Do not clear site data.';
+        panel.append(heading,text,status,link,help);
+        document.querySelector('main').replaceChildren(panel);
+        try {
+            const saved=await store.getAllLectures(), unreadable=await store.getUnreadableLectures();
+            status.textContent=`Found ${saved.length} readable saved lecture(s) and ${unreadable.length} saved record(s) that this version cannot read.`;
+        } catch {status.textContent='Browser storage could not be read. This is not confirmation that your lectures were deleted.';}
+        return;
+    }
     switchView(new URL(location.href).searchParams.has('capture') ? 'input-section' : 'welcome-section');
     const busy = () => session.busy || Boolean(reportController) || reportActionPending;
     const shell = initShell({busy});
@@ -427,8 +445,8 @@ function initReportControls() {
     });
     action('export-md', async () => downloadText(exportMarkdown(await openLecture(currentLectureId)), 'lecture.md', 'text/markdown;charset=utf-8'));
     action('export-csv', async () => downloadText(exportAnkiCsv(await openLecture(currentLectureId)), 'flashcards.csv', 'text/csv;charset=utf-8'));
-    action('export-pdf', () => window.print());
-    action('print-report', () => window.print());
+    action('export-pdf', choosePrintLayout);
+    action('print-report', choosePrintLayout);
     action('rename-report', async () => {
         const lecture = await openLecture(currentLectureId), title = prompt('Lecture title', lecture.title);
         if (title !== null) {await renameLecture(lecture.id, title); const updated = await openLecture(lecture.id); if (currentLectureId === lecture.id) renderLecture(updated);}

@@ -1,3 +1,4 @@
+import {jsonProblems} from './study-json.js';
 import {rejectionLabels} from './providers/diagnostics.js';
 import {PROVIDER_IDS} from './providers/catalog.js';
 import {safeValidationIssue,explainValidation} from './study-validation.js';
@@ -13,12 +14,16 @@ export function processingIssue(error, stage, now = Date.now()) {
     const reason = kind === 'input' && reasons.includes(error.reason) ? error.reason : kind !== 'study_output' ? 'unknown' : message.includes('invalid JSON') ? 'json'
         : message.includes('Evidence') ? 'evidence' : /budget|size/.test(message) ? 'size'
         : message.includes('stopped before') ? 'incomplete' : message.includes('empty notes') ? 'empty' : 'schema';
-    return validateProcessingIssue({stage,kind,reason,status:error.status,providerId:error.providerId,section:error.section,totalSections:error.totalSections,validationIssue:error.validationIssue,rejection:error.rejection,schemaFallback:error.schemaFallback,requestBytes:error.requestBytes,responseFormat:error.responseFormat,operation:error.operation,
+    return validateProcessingIssue({stage,kind,reason,status:error.status,providerId:error.providerId,section:error.section,totalSections:error.totalSections,validationIssue:error.validationIssue,rejection:error.rejection,schemaFallback:error.schemaFallback,requestBytes:error.requestBytes,responseFormat:error.responseFormat,operation:error.operation,networkReason:error.networkReason,outputIssue:error.outputIssue,outputAttempt:error.outputAttempt,firstOutputIssue:error.firstOutputIssue,
         retryAt:kind === 'rate_limit' && Number.isFinite(error.retryAfterMs) ? now + Math.max(0,error.retryAfterMs) : undefined});
 }
 export function validateProcessingIssue(value) {
     if (!value || !PROCESSING_STAGES.includes(value.stage) || !kinds.includes(value.kind) || !reasons.includes(value.reason)) throw new TypeError('Invalid processing issue.');
     return {stage:value.stage,kind:value.kind,reason:value.reason,
+        ...(['timeout','connection'].includes(value.networkReason)?{networkReason:value.networkReason}:{}),
+        ...(Object.hasOwn(jsonProblems,value.outputIssue)?{outputIssue:value.outputIssue}:{}),
+        ...(value.outputAttempt===2?{outputAttempt:2}:{}),
+        ...([...Object.keys(jsonProblems),'schema','validation'].includes(value.firstOutputIssue)?{firstOutputIssue:value.firstOutputIssue}:{}),
         ...(Object.hasOwn(rejectionLabels,value.rejection)?{rejection:value.rejection}:{}),
         ...(value.schemaFallback === true?{schemaFallback:true}:{}),
         ...(Number.isSafeInteger(value.requestBytes) && value.requestBytes >= 0 && value.requestBytes <= 10000000?{requestBytes:value.requestBytes}:{}),
@@ -46,11 +51,20 @@ export function describeIssue(issue) {
         unknown:['This step could not finish.', 'Keep this tab open and save any available transcript or audio. Retry the step; if it repeats, use the details below to report the problem.'],
     };
     let [detail,next] = descriptions[issue.kind];
+    if(issue.kind==='network') {
+        detail=issue.status>=500 ? `The provider returned a temporary server error (HTTP ${issue.status}).`
+            :issue.networkReason==='timeout' ? 'The request timed out before a complete response arrived.'
+            : 'The browser could not complete the request. The exact connection failure is unavailable.';
+        next=issue.status>=500 ? 'Wait briefly, then retry from saved progress using the same settings.'
+            :issue.networkReason==='timeout' ? 'Retry from saved progress. The provider or connection may have been slow.'
+            : 'Check your connection, then retry from saved progress. Browser restrictions or provider availability may also be involved.';
+    }
     if(issue.rejection && Object.hasOwn(rejectionLabels,issue.rejection))detail=rejectionLabels[issue.rejection];
     if(issue.status===400 && issue.kind==='response')next='Retrying unchanged settings may fail again. Copy Problem details below so the rejected request can be investigated.';
+    if(issue.outputIssue && Object.hasOwn(jsonProblems,issue.outputIssue))detail=jsonProblems[issue.outputIssue];
     if(issue.kind==='study_output' && issue.validationIssue)detail=explainValidation(issue.validationIssue);
-    return {title:issue.stage === 'notes' && issue.section ? `Notes ${issue.kind === 'cancelled' ? 'paused' : 'stopped'} at section ${issue.section} of ${issue.totalSections}` : `${labels[issue.stage]} ${issue.kind === 'cancelled' ? 'paused' : 'needs attention'}`,detail,next,
-        diagnostic:`Step: ${labels[issue.stage]}${issue.providerId?` · Provider: ${issue.providerId}`:''} · ${issue.kind}${issue.status ? ` · HTTP ${issue.status}` : ''} · ${issue.reason}${issue.operation?` · Operation: ${issue.operation}`:''}${issue.responseFormat?` · Format: ${issue.responseFormat}`:''}${issue.requestBytes!==undefined?` · Request bytes: ${issue.requestBytes}`:''}${issue.rejection?` · Rejected: ${issue.rejection}`:''}${issue.schemaFallback?' · JSON compatibility fallback also failed':''}${issue.validationIssue?` · ${explainValidation(issue.validationIssue)}`:''}`};
+    return {title:issue.operation==='merge' ? `Combining section overviews ${issue.kind==='cancelled'?'paused':'needs attention'}` : issue.stage === 'notes' && issue.section ? `Notes ${issue.kind === 'cancelled' ? 'paused' : 'stopped'} at section ${issue.section} of ${issue.totalSections}` : `${labels[issue.stage]} ${issue.kind === 'cancelled' ? 'paused' : 'needs attention'}`,detail,next,
+        diagnostic:`Step: ${labels[issue.stage]}${issue.providerId?` · Provider: ${issue.providerId}`:''} · ${issue.kind}${issue.status ? ` · HTTP ${issue.status}` : ''} · ${issue.reason}${issue.networkReason?` · Network reason: ${issue.networkReason}`:''}${issue.outputIssue?` · Output: ${issue.outputIssue}`:''}${issue.outputAttempt?` · Attempt: ${issue.outputAttempt} (repair)` : ''}${issue.firstOutputIssue?` · First attempt: ${issue.firstOutputIssue}`:''}${issue.operation?` · Operation: ${issue.operation}`:''}${issue.responseFormat?` · Format: ${issue.responseFormat}`:''}${issue.requestBytes!==undefined?` · Request bytes: ${issue.requestBytes}`:''}${issue.rejection?` · Rejected: ${issue.rejection}`:''}${issue.schemaFallback?' · JSON compatibility fallback also failed':''}${issue.validationIssue?` · ${explainValidation(issue.validationIssue)}`:''}`};
 }
 
 export function initProcessingFlow({retry,settings,exportTranscript,cancel}) {

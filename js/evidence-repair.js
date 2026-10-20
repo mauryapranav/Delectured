@@ -23,7 +23,7 @@ export function evidenceChoices(source) {
 
 export function evidenceRepairSchema(choices) {
     const schema = structuredClone(PACKET_OUTPUT_SCHEMA);
-    const reference = {type:'array',items:{type:'object',properties:{excerptId:{type:'string',enum:choices.map(c=>c.id)}},required:['excerptId'],additionalProperties:false}};
+    const reference = {type:'array',minItems:1,maxItems:choices.length,items:{type:'object',properties:{excerptId:{type:'string',enum:choices.map(c=>c.id)}},required:['excerptId'],additionalProperties:false}};
     schema.properties.evidence = reference;
     for (const field of ['concepts','flashcards','examSignals','links']) schema.properties[field].items.properties.evidence = structuredClone(reference);
     return schema;
@@ -41,10 +41,22 @@ export function resolveEvidenceChoices(value, source, choices) {
     if (result && typeof result === 'object') {
         result.evidence = resolve(result.evidence);
         for (const field of ['concepts','flashcards','examSignals','links']) {
-            if (Array.isArray(result[field])) for (const item of result[field]) if (item && typeof item === 'object') item.evidence = resolve(item.evidence);
+            if (Array.isArray(result[field])) for (const item of result[field]) if (item && typeof item === 'object') {try {item.evidence = resolve(item.evidence);} catch {item.evidence = [];}}
         }
     }
     return result;
 }
 
-export const evidenceRepairPrompt = `Recreate the study packet using the numbered transcript excerpts supplied below. They contain the original source text in order. For EVERY evidence reference return ONLY {"excerptId":"e0"}, choosing an ID from the supplied excerpts that supports the item. Do not copy or invent quotes or source IDs: the app inserts the original text. Never cite an unrelated excerpt. Omit optional items without support. Keep the same top-level fields: notes, evidence, topics, concepts, flashcards, examSignals, links. Item shapes: concepts={"term":"term","definition":"meaning","evidence":[{"excerptId":"e0"}]}; flashcards={"q":"question","a":"answer","evidence":[{"excerptId":"e0"}]}; examSignals={"label":"explicit cue","evidence":[{"excerptId":"e0"}]}; links={"from":"concept term","to":"concept term","relation":"relationship","evidence":[{"excerptId":"e0"}]}. Topics is a list of strings. Use at most 1200 characters of notes, 3 concepts, 3 flashcards, 2 links, 1 exam cue, and 1 evidence reference per item. Definitions and answers at most 150 characters. Lists may be empty; notes and its evidence are required. Only explicit exam cues; links must refer to extracted concepts. Return only JSON matching the schema.`;
+export const evidenceRepairPrompt = String.raw`Create useful study notes for the CURRENT source, using the numbered excerpts in order. Neighbouring context is background only.
+Return ONE JSON object. No introduction, no Markdown fence around JSON, no trailing commas. Escape newlines as \n and quotes as \" inside JSON strings. Markdown is allowed inside the notes string.
+First write clear notes explaining what this section actually teaches: definitions, mechanisms, relevant examples, equations or code. Preserve uncertainty; never guess missing context. Do not invent exam claims. If the section is only introductory or administrative, briefly say what it contains without inventing study content.
+Use this complete output shape (values below illustrate structure, not lecture facts):
+{"notes":"Concise notes supported by the current excerpts.","evidence":[{"excerptId":"e0"}],"topics":[],"concepts":[],"flashcards":[],"examSignals":[],"links":[]}
+Notes and evidence are required. Cite only actual excerpt IDs supplied in this request; select the excerpts supporting your notes. Never write quotes or source IDs yourself. Usually 1-4 references suffice, but include every supplied excerpt needed to support the notes. Never invent an ID or repeat the same reference.
+Aim for 800-1500 characters of notes; maximum 2000. Prioritize the notes. Optional lists may stay empty. If adding extras, use at most 3 topics, 3 concepts, 3 flashcards, 1 exam cue and 2 links. Definitions and answers should stay under 150 characters. Entire JSON should stay under 5000 UTF-8 bytes; use fewer optional items rather than cut essential notes.
+Optional item shapes:
+concepts: {"term":"name","definition":"meaning","evidence":[{"excerptId":"e0"}]}
+flashcards: {"q":"question","a":"answer","evidence":[{"excerptId":"e0"}]}
+examSignals: {"label":"explicit instructor cue","evidence":[{"excerptId":"e0"}]}
+links: {"from":"exact extracted concept term","to":"exact extracted concept term","relation":"relationship","evidence":[{"excerptId":"e0"}]}
+Topics are strings. Each optional item needs a relevant reference. Omit unsupported optional items. Both link endpoints must exist in concepts. Return the JSON object only.`;
