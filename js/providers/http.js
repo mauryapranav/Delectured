@@ -17,9 +17,11 @@ export function parseRetryAfter(value, now = Date.now()) {
 }
 
 // Raw bodies, keys, URLs and prompts never become error messages or diagnostic fields.
-export async function requestJSON(url, {providerId, headers, body, signal, timeoutMs = 120000, method = 'POST'}) {
+export async function requestJSON(url, {providerId, headers, body, signal, timeoutMs = 120000, method = 'POST', beforeRequest, onUsage}) {
     throwIfAborted(signal);
     if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new ProviderError('unsupported', 'Invalid request timeout.', {providerId});
+    await beforeRequest?.();
+    throwIfAborted(signal);
     const controller = new AbortController();
     const cancel = () => controller.abort();
     signal?.addEventListener('abort', cancel, {once: true});
@@ -64,10 +66,11 @@ export async function requestJSON(url, {providerId, headers, body, signal, timeo
             throw new ProviderError(kind, message, {providerId, status, retryAfterMs, rejection: status === 400 ? rejectionReason(data) : undefined,
                 retryable: kind === 'rate_limit' || kind === 'network'});
         }
+        await onUsage?.(data?.usage);
         return data;
     } catch (error) {
         throwIfAborted(signal);
-        if (error instanceof ProviderError) throw error;
+        if (error instanceof ProviderError || ['storage','budget'].includes(error.kind)) throw error;
         throw new ProviderError('network', timedOut ? 'The provider request timed out.' : 'Could not reach the provider. Check the connection and browser access support.', {providerId, networkReason:timedOut?'timeout':'connection', retryable: true});
     } finally {
         clearTimeout(timer);

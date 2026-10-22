@@ -13,6 +13,7 @@ const messages = {
     response: 'The provider returned an unusable response. Audio has been retained.',
     storage: 'Audio or its transcript could not be saved. Free device space, then retry, or export the audio. Keep this tab open.',
     blocked: 'Processing is blocked. Retry, export the retained audio, or discard it.',
+    budget: 'The transcription request allowance has been reached. Completed transcript sections and remaining audio are saved. Review usage before allowing more requests.',
 };
 export class QueueError extends Error {
     constructor(kind = 'blocked') {
@@ -130,8 +131,15 @@ export class Queue {
             if (delay > 0) {await this.progress(id, 'waiting', undefined, chunk.nextAttemptAt); await this.wait(delay, signal); continue;}
             const lecture = await this.store.getLecture(id);
             if (!lecture) throw aborted();
+            if (lecture.audioUsage && lecture.audioUsage.requests >= lecture.audioUsage.limit) {
+                await this.store.putChunk({...chunk, status:'failed', error:'budget'}, {signal});
+                throw new QueueError('budget');
+            }
             const active = {...chunk, status: 'processing', attempts: chunk.attempts + 1, nextAttemptAt: 0};
             await this.store.putChunk(active, {signal});
+            // Reserve under the lecture lock before sending. A lost response may
+            // still consume quota; manual retries never reset this durable count.
+            if (lecture.audioUsage) await this.store.updateLecture(id, {audioUsage:{...lecture.audioUsage, requests:lecture.audioUsage.requests + 1}}, {signal});
             await this.progress(id, 'processing');
             const selection = lecture.providerSelections?.transcription ?? {providerId: 'groq', model: getProviderMetadata('groq').defaults.transcription};
             let result;

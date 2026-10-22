@@ -68,7 +68,8 @@ export function validateCheckpoint(value) {
     object(value); if (value.version !== 1 || !/^[a-f0-9]{64}$/.test(value.key)) throw new TypeError('Invalid analysis checkpoint.');
     return {version: 1, key: value.key,
         maps: list(value.maps, 10000, item => ({id: text(item.id, 80), packet: validatePacket(item.packet)})),
-        merges: list(value.merges, 20000, item => ({id: text(item.id, 80), ...validateOverview(item)}))};
+        merges: list(value.merges, 20000, item => ({id: text(item.id, 80), ...validateOverview(item), ...(item.inputKey === undefined ? {} : {inputKey: text(item.inputKey, 64)})})),
+        ...(value.splits === undefined ? {} : {splits: list(value.splits, 10000, id => {if (!/^w\d+(?:-[01])?$/.test(id)) throw new TypeError('Invalid split source.'); return id;})})};
 }
 
 // Optional persisted study extensions use explicit allowlists, including references.

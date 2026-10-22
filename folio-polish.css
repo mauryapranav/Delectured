@@ -91,7 +91,7 @@ body {
 .graph-picker .select-control { min-width:180px; }
 .import-policy { gap:14px; }
 @media(min-width:1181px) {
-    #panel-notes { padding-left:150px; padding-right:34px; }
+    #panel-notes { padding-left:54px; padding-right:34px; }
     .margin-annotation { display:block; left:-125px; top:65px; width:95px; }
 }
 @media(max-width:1180px) {
@@ -228,7 +228,7 @@ html:has(#welcome-section.active-view) { scroll-padding-top:0; }
 
 @media print {
     @page { size:A4; margin:18mm 17mm 20mm; }
-    .print-options,#app-update,#unexpected-failure { display:none!important; }
+    .print-options,#app-update,#unexpected-failure,.report-usage { display:none!important; }
     body { margin:0!important; }
     .journal-title-block { display:block; border-bottom:1pt solid #888; padding:0 0 12pt; margin:0 0 18pt; break-inside:avoid; }
     .lecture-heading { font:700 25pt/1.15 Georgia,serif; letter-spacing:0; margin:0 0 10pt; }
@@ -253,4 +253,29 @@ html:has(#welcome-section.active-view) { scroll-padding-top:0; }
     .recall-card summary { font-size:0; }
     .recall-card summary::after { content:"Answer"; font-size:9pt; }
     body[data-print-scope="notes"] #panel-transcript { display:none!important; }
+}
+.appearance-toggle { border:1px solid var(--accent); border-radius:4px; padding:6px 10px; color:var(--accent); font-size:12px; font-weight:700; white-space:nowrap; }
+.appearance-toggle:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.study-tabs [aria-selected="true"] { font-weight:750; box-shadow:inset 0 -3px var(--accent); }
+.section-index { color:var(--accent); font-weight:750; }
+.folio-page .study-annotation { display:flex; position:static; align-items:flex-start; gap:14px; width:auto; max-width:620px; padding:12px 16px; margin:18px 0; border-left:3px solid var(--accent); background:var(--accent-soft); color:var(--ink); font:14px/1.6 var(--font-sans); transform:none; }
+.annotation-label { color:var(--accent); flex:0 0 90px; font-size:11px; text-transform:uppercase; letter-spacing:.6px; }
+@media screen {
+    html[data-appearance="modern"] { --paper:#f4f5f7; --sheet:#fff; --rail:#edf0f3; --line:#ccd2d8; --ink:#202830; --muted:#59636e; --accent:#2457d6; --accent-soft:#e8efff; --white:#fff; --shadow:0 16px 60px #172b4d12; --paper-depth:0 2px 5px #172b4d08,0 18px 42px #172b4d0a; --font-serif:system-ui,-apple-system,'Segoe UI','Nirmala UI',sans-serif; }
+    html[data-appearance="modern"][data-theme="dark"] { --paper:#14191f; --sheet:#1d242c; --rail:#161c23; --line:#414e5c; --ink:#edf1f5; --muted:#b4c0cc; --accent:#8bb4ff; --accent-soft:#24344f; --white:#14191f; --shadow:0 16px 60px #0002; --paper-depth:0 2px 6px #0002,0 20px 48px #0002; }
+    [data-appearance="modern"] body,[data-appearance="modern"] .folio-page,[data-appearance="modern"] .welcome-folio { background-image:none; }
+    [data-appearance="modern"] .folio-page { border-radius:8px; box-shadow:0 2px 12px #0001; }
+    [data-appearance="classic"] .folio-page { box-shadow:inset 3px 0 12px #84623816,inset -3px 0 12px #84623816,var(--paper-depth); border-color:var(--line); }
+    [data-appearance="classic"][data-theme="dark"] .folio-page { box-shadow:inset 2px 0 9px #0003,inset -2px 0 9px #0003,var(--paper-depth); }
+}
+@media(max-width:660px) {
+    .masthead-right { gap:8px; }
+    .appearance-toggle { padding:6px; font-size:11px; }
+    .folio-page .study-annotation { flex-direction:column; gap:4px; }
+    .annotation-label { flex-basis:auto; }
+}
+@media print {
+    .appearance-toggle { display:none!important; }
+    .folio-page .study-annotation { display:block!important; border-left:1pt solid #777; background:none!important; color:#111; padding:6pt 10pt; margin:10pt 0; font:10pt/1.5 Georgia,serif; break-inside:avoid; }
+    .annotation-label { display:block; color:inherit; margin-bottom:3pt; }
 }

@@ -1,3 +1,4 @@
+import {sectionAnnotation} from './notes-annotations.js';
 import {renderMarkdown} from './safe-render.js';
 import {refreshRecent} from './shell.js';
 import {refreshSelects} from './select-control.js';
@@ -78,33 +79,27 @@ export function renderResults(data) {
     for(const key of ['clarity','density','pace'])el(`score-${key}`).textContent=data.scores?.[key]??'--';
     const notes=el('summary-content');notes.replaceChildren();
     const overview=make('section');overview.id='note-overview';overview.append(make('h2','Overview'),markdown(data.summary||'Notes are not ready yet. Your saved transcript is available in the Transcript tab.'));notes.append(overview);
-    const sections=[['note-overview','Overview']];
+    const sections=[['note-overview','Overview']], usedAnnotations=new Set();
     (data.sections??[]).forEach((s,i)=>{
         const section=make('section',undefined,'note-section');section.id=`note-section-${i}`;
         const label=s.topics?.[0]||`Section ${i+1}`, heading=make('h2');heading.append(make('span',String(i+1),'section-index'),document.createTextNode(label));
         const body=markdown(s.notes);
-        const noteLine=[...body.querySelectorAll('p')].find(p=>/^margin note:/i.test(p.textContent));
-        const savedNote=noteLine?.textContent.replace(/^margin note:\s*/i,'').trim();
-        const explicitNote=savedNote&&savedNote.length<=110?savedNote:undefined;
-        if(explicitNote)noteLine.remove();
         const timings=(data.timestamps??[]).filter(t=>t.sourceId===s.id);
         if(timings.length){
             const stamp=seconds=>`${Math.floor(seconds/60).toString().padStart(2,'0')}:${Math.floor(seconds%60).toString().padStart(2,'0')}`;
             heading.append(make('span',`${stamp(Math.min(...timings.map(t=>t.start)))} – ${stamp(Math.max(...timings.map(t=>t.end)))}`,'section-timing'));
         }
         section.append(heading,body);
-        if(i===0 || explicitNote) {
-            const keyIdea=[...body.querySelectorAll('p')].find(p=>/^key idea:/i.test(p.textContent));
-            const text=keyIdea?.textContent.replace(/^key idea:\s*/i,'').trim();
-            const firstDefinition=s.concepts?.[0]?.definition?.split(/(?<=[.!?])\s/)[0];
-            const excerpt=explicitNote || (text&&text.length<=90?text:firstDefinition&&firstDefinition.length<=90?firstDefinition:label);
-            if(excerpt.length<=110) {
-                const annotation=make('aside',undefined,`margin-annotation${explicitNote?' explicit-note':''}`);
-                const arrow=make('span','↗','annotation-arrow');arrow.setAttribute('aria-hidden','true');annotation.append(arrow,make('span',excerpt));
-                if(!explicitNote)annotation.setAttribute('aria-hidden','true');
-                else annotation.setAttribute('aria-label','Margin note');
-                section.append(annotation);
+        const chosen = sectionAnnotation(s,i,usedAnnotations);
+        if(chosen) {
+            if(chosen.label==='Key idea') {
+                const original=[...body.querySelectorAll('p')].find(p=>p.textContent.replace(/^key idea:\s*/i,'').trim()===chosen.text);
+                original?.remove();
             }
+            const annotation=make('aside',undefined,'margin-annotation explicit-note study-annotation');
+            annotation.setAttribute('aria-label',chosen.label);
+            annotation.append(make('strong',chosen.label,'annotation-label'),make('span',chosen.text));
+            section.append(annotation);
         }
         refs(section,s.evidence);notes.append(section);sections.push([section.id,label]);
     });
@@ -175,6 +170,12 @@ export function renderLecture(lecture) {
     el('transcript-content').textContent=lecture.transcript||'No transcript is saved.';
     el('capture-gap-warning').textContent=lecture.captureGaps?.length?'This recording contains a capture gap. Missing audio cannot be reconstructed.':'';
     renderResults(lecture.analysis);refreshRecent(lecture.id);
+    el('report-usage')?.remove();
+    if(lecture.notesUsage){
+        const usage=lecture.notesUsage,details=make('details',undefined,'report-usage');details.id='report-usage';
+        details.append(make('summary','Notes API usage'),make('p',`${usage.requests} requests reserved; ${usage.retries} network/rate-limit retries. Allowance: ${usage.limit} requests. Provider-reported tokens: ${usage.inputTokens} input, ${usage.outputTokens} output. Counts may be incomplete for lost responses; a cancelled reservation may not have been sent. These are local notes-job counts, not your provider account bill.`));
+        const list=make('ol');for(const event of usage.events??[])list.append(make('li',`${new Date(event.at).toLocaleString()} · ${event.operation} · ${event.state}`));details.append(list);el('result-section').append(details);
+    }
 }
 
 export function choosePrintLayout() {

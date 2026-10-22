@@ -2,6 +2,7 @@
 import {PROVIDER_IDS} from './providers/catalog.js';
 import {validateStudyFields, validateCheckpoint} from './analysis-schema.js';
 import {validateProcessingIssue} from './processing-flow.js';
+import {validateUsage} from './request-budget.js';
 export const SCHEMA_VERSION = 2;
 export const LANGUAGES = ['en', 'hi', 'hi-en'];
 export const LECTURE_STATES = ['recording', 'processing', 'ready', 'interrupted', 'failed'];
@@ -97,10 +98,19 @@ export function validateLecture(value, now = new Date().toISOString()) {
         segments: validateSegments(value.segments), analysis: validateAnalysis(value.analysis ?? (legacyAnalysis ? value : {})),
         analysisStatus: choice(value.analysisStatus, ANALYSIS_STATES, 'analysis state', hasAnalysis ? 'ready' : 'pending'),
         ...(value.analysisCheckpoint ? {analysisCheckpoint: validateCheckpoint(value.analysisCheckpoint)} : {}),
+        ...(value.notesUsage ? {notesUsage:validateUsage(value.notesUsage)} : {}),
+        ...(value.audioUsage !== undefined ? {audioUsage:validateAudioUsage(value.audioUsage)} : {}),
+        ...(typeof value.includeExtras==='boolean' ? {includeExtras:value.includeExtras} : {}),
         ...(value.uploadSource ? {uploadSource: validateUploadSource(value.uploadSource)} : {}),
         ...(value.processingIssue ? {processingIssue: validateProcessingIssue(value.processingIssue)} : {}),
         ...(value.providerSelections ? {providerSelections: validateProviderSelections(value.providerSelections)} : {}),
     };
+}
+export function validateAudioUsage(value) {
+    object(value, 'audio request usage');
+    const {requests, limit} = value;
+    if (!Number.isSafeInteger(requests) || requests < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 1000000 || requests > limit) throw new TypeError('Invalid transcription request allowance.');
+    return {requests, limit};
 }
 function validateUploadSource(value) {
     object(value, 'upload source');

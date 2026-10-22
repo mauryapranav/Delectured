@@ -20,7 +20,8 @@ export class Session {
     }
     async draft(run) {
         await this.store.saveLecture({id: run.id, title: run.options.title ?? 'Lecture Analysis', language: run.options.language,
-            providerSelections: run.options.providerSelections, status: 'recording', transcript: ''});
+            ...(run.file && run.options.transcriptionRequestLimit !== undefined ? {audioUsage:{requests:0,limit:run.options.transcriptionRequestLimit}} : {}),
+            providerSelections: run.options.providerSelections, ...(typeof run.options.includeExtras==='boolean'?{includeExtras:run.options.includeExtras}:{}), status: 'recording', transcript: ''});
         if (run.controller.signal.aborted) {await this.store.deleteLecture(run.id); throw aborted();}
     }
     async accept(run, chunk) {

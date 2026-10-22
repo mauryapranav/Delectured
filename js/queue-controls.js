@@ -3,7 +3,7 @@ import {describeIssue} from './processing-flow.js';
 import {downloadText} from './exports.js';
 
 // Functional recovery controls only; visual design stays in the final UI layer.
-export function initQueueControls(queue, {beforeRetry = async () => {}, recovered = async () => {}, failed = async () => {}, settled = () => {}, recover = (id, {retry}) => retry ? queue.retry(id) : queue.resume(id), discard = id => queue.discard(id)} = {}) {
+export function initQueueControls(queue, {beforeRetry = async () => {}, recovered = async () => {}, failed = async () => {}, settled = () => {}, exclusive = work => work(), recover = (id, {retry}) => retry ? queue.retry(id) : queue.resume(id), discard = id => queue.discard(id)} = {}) {
     const panel = document.createElement('section');
     panel.id = 'queue-recovery'; panel.hidden = true;
     const heading = document.createElement('h2'); heading.textContent = 'Saved work that needs attention';
@@ -16,7 +16,7 @@ export function initQueueControls(queue, {beforeRetry = async () => {}, recovere
         if(busy || rows.get(id)?.retryAt > Date.now())return;
         setBusy(true);
         let accepted=false;
-        try {await beforeRetry(id); accepted=true; await recover(id,{retry,file}); await recovered(id,{retry});}
+        try {await exclusive(async()=>{const extended=await beforeRetry(id); accepted=true; await recover(id,{retry:retry || extended===true,file}); await recovered(id,{retry});});}
         catch(error) {
             if(error.kind !== 'blocked')await failed(error,id);
             const item=rows.get(id);

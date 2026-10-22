@@ -4,7 +4,7 @@ import {PROVIDER_IDS} from './providers/catalog.js';
 import {safeValidationIssue,explainValidation} from './study-validation.js';
 export const PROCESSING_STAGES = Object.freeze(['prepare', 'transcribe', 'notes', 'save']);
 const labels = {prepare:'Prepare audio', transcribe:'Transcribe audio', notes:'Create study notes', save:'Save study material'};
-const kinds = ['auth','quota','rate_limit','network','unsupported','response','study_output','storage','cancelled','permission','input','unknown'];
+const kinds = ['auth','quota','rate_limit','network','unsupported','response','study_output','storage','cancelled','permission','input','unknown','budget','blocked'];
 const reasons = ['json','evidence','size','incomplete','empty','schema','unknown','empty_file','file_size','file_format','decode','duration','source_required','source_mismatch'];
 export function processingIssue(error, stage, now = Date.now()) {
     let kind = error.name === 'AbortError' ? 'cancelled' : error.name === 'NotAllowedError' ? 'permission'
@@ -37,6 +37,8 @@ export function validateProcessingIssue(value) {
 }
 export function describeIssue(issue) {
     const descriptions = {
+        budget:issue.stage==='transcribe' ? ['The transcription request allowance has been reached.', 'Resume saved work to review and approve up to 8 more attempts. Completed transcript sections will be reused.'] : ['The notes request allowance has been reached.', 'Review the usage shown below. Retry notes will ask before adding a limited allowance. Saved sections will be reused.'],
+        blocked:['Another tab is using the notes pipeline, or this browser cannot coordinate requests.', 'Return to the active tab and pause its notes job before retrying. Use a current browser that supports secure cross-tab coordination.'],
         auth:['Provider access was rejected.', 'Open Settings and check the key and model access for this step.'],
         permission:['Microphone access was not granted.', 'Allow microphone access in your browser, then start recording again. You can also upload audio.'],
         input:[['source_required','source_mismatch'].includes(issue.reason) ? (issue.reason === 'source_mismatch' ? 'The selected file does not match the original recording.' : 'The original recording is needed to finish this upload.') : ({empty_file:'The selected file is empty.',file_size:'This file exceeds the 500 MiB upload limit.',file_format:'This file type is not supported.',decode:'This browser could not read or decode the audio.',duration:'The audio exceeds the supported duration or channel limits, or its duration could not be read.'})[issue.reason] || 'This audio file could not be prepared.', ['source_required','source_mismatch'].includes(issue.reason) ? 'Use Choose original file to continue in Saved work below. Completed transcript sections will be reused.' : 'Choose a playable MP3 or WAV file, at most 500 MiB and two hours, with mono or stereo audio. Convert or split the original file if needed, then upload again.'],
@@ -47,7 +49,7 @@ export function describeIssue(issue) {
         response:issue.status ? ['The provider rejected this request.', 'Check the selected model and its supported settings before retrying.'] : ['The provider returned a response this app could not use.', 'Try again once. If it repeats, check the selected model in Settings.'],
         study_output:[({json:'The AI returned notes in a format the app could not read.', evidence:'The AI supplied a quote that could not be found in this transcript section. The app stopped instead of showing an unverified quote.', size:'The AI wrote too much for one notes section.', incomplete:'The provider stopped before finishing its response.', empty:'The provider returned an empty response.', schema:'The AI left out required parts of the notes or used the wrong format.'})[issue.reason] || 'The notes could not be validated.', 'The app already asked the AI to try again once. Click Retry notes to continue from saved sections. Your audio does not need to be uploaded again. If the same section fails again, choose another notes model in Settings; changing models restarts notes generation.'],
         storage:['This browser could not save the result.', 'Keep this tab open. Save any available transcript or audio, then free device space before retrying.'],
-        cancelled:['Notes generation was stopped.', 'You can resume from saved progress when you are ready.'],
+        cancelled:['Notes generation was stopped.', 'You can resume from saved progress when you are ready. A request already sent to the provider may still count toward its usage.'],
         unknown:['This step could not finish.', 'Keep this tab open and save any available transcript or audio. Retry the step; if it repeats, use the details below to report the problem.'],
     };
     let [detail,next] = descriptions[issue.kind];

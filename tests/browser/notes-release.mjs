@@ -59,7 +59,7 @@ try {
         const reply = (status, data, headers = {}) => route.fulfill({status, contentType:'application/json', headers:{'access-control-expose-headers':'retry-after',...headers}, body:JSON.stringify(data)});
         if (mode === 'network') return route.abort();
         if (mode === 'envelope') return route.fulfill({status:200, contentType:'text/html', body:'private-api-html'});
-        if (/^http/.test(mode)) return reply(Number(mode.slice(4)), {error:{message:'private-provider-body'}}, {'retry-after':'60'});
+        if (/^http/.test(mode)) return reply(Number(mode.slice(4)), {error:{message:'private-provider-body'}}, {'retry-after':'61'});
         if (failWindow && payload.source?.id === 'w1') return reply(429, {error:{}}, {'retry-after':'1'});
         let content;
         if (payload.question) {
@@ -118,7 +118,7 @@ try {
         mode = scenario; await seed(scenario, 'Python uses indentation to define blocks.');
         const start = requests.length; await retry(scenario);
         await page.waitForFunction(({id,message}) => document.querySelector(`[data-lecture-id="${id}"] [role=status]`)?.textContent.includes(message), {id:scenario,message});
-        assert.equal(requests.length-start, scenario.startsWith('http') || scenario === 'network' ? 1 : 2);
+        assert.equal(requests.length-start, scenario==='network'?3:scenario.startsWith('http')?1:2);
         const saved = await page.evaluate(async id => (await import('./js/store.js')).getLecture(id), scenario);
         assert.equal(saved.transcript, 'Python uses indentation to define blocks.');
         assert.equal(saved.analysisStatus, 'failed');
@@ -172,12 +172,20 @@ try {
     wav.writeUInt32LE(16,16); wav.writeUInt16LE(1,20); wav.writeUInt16LE(1,22); wav.writeUInt32LE(16000,24);
     wav.writeUInt32LE(32000,28); wav.writeUInt16LE(2,32); wav.writeUInt16LE(16,34); wav.write('data',36); wav.writeUInt32LE(32000,40);
     mode='hold'; const uploadNotes=page.waitForRequest(r=>r.url().endsWith('/chat/completions'));
-    await page.locator('#file-input').setInputFiles({name:'fresh.wav',mimeType:'audio/wav',buffer:wav}); await uploadNotes;
+    await page.locator('#file-input').setInputFiles({name:'fresh.wav',mimeType:'audio/wav',buffer:wav});
+    await page.getByRole('button',{name:'Start processing',exact:true}).click(); await uploadNotes;
     await page.locator('#processing-cancel').click();
     await page.waitForFunction(()=>document.querySelector('#processing-problem-title').textContent.includes('paused'));
     for(const route of held)await route.abort().catch(()=>{});held=[];
     await page.waitForFunction(()=>[...document.querySelectorAll('#queue-recovery button')].filter(b=>b.textContent==='Resume saved work').every(b=>!b.disabled || b.closest('[data-lecture-id]').dataset.lectureId==='http429'));
     // Real recorder with short test-only chunk boundaries; microphone remains fake.
+    await page.goto(base+'index.html?capture=1'); await ready();
+    const beforeDuplicate=requests.length;
+    await page.locator('#file-input').setInputFiles({name:'fresh.wav',mimeType:'audio/wav',buffer:wav});
+    await page.getByRole('heading',{name:'This recording is already saved'}).waitFor();
+    await page.getByRole('button',{name:'Use saved lecture',exact:true}).click();
+    assert.equal(requests.length,beforeDuplicate);
+    console.log('PASS duplicate upload: saved recording reused without another notes request');
     await page.goto(base+'index.html?capture=1'); await ready();
     await page.evaluate(async()=>{
         const {Recorder}=await import('./js/recorder.js'); const open=Recorder.prototype.open;
@@ -237,7 +245,11 @@ try {
     await page.locator('#lecture-question').fill('How does Python define blocks?');
     await page.locator('#lecture-question-form button[type=submit]').click();
     await page.waitForFunction(() => document.getElementById('lecture-answer').textContent.includes('p0:'));
-    mode='bad-answer'; await page.locator('#lecture-question-form button[type=submit]').click();
+    const questionCalls=requests.length;
+    await page.locator('#lecture-question-form button[type=submit]').click();
+    await page.waitForFunction(() => document.getElementById('lecture-answer').textContent.includes('p0:'));
+    assert.equal(requests.length,questionCalls);
+    mode='bad-answer'; await page.locator('#lecture-question').fill('Explain Python indentation.');await page.locator('#lecture-question-form button[type=submit]').click();
     await page.waitForFunction(() => document.getElementById('lecture-answer').textContent.includes('JSON'));
     assert(!(await page.locator('#lecture-answer').textContent()).includes('private-answer'));
     mode='success';

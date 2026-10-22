@@ -62,6 +62,17 @@ export function neighbouringContext(windows, index) {
     };
     return {before:clip(windows[index-1]?.text,true), after:clip(windows[index+1]?.text,false)};
 }
+// A deterministic, bounded fallback: source text is conserved, never rewritten.
+function smallerSources(source) {
+    if (source.id.split('-').length > 2 || byteLength(source.text) < 1000) return null;
+    const chars = Array.from(source.text);
+    let cut = chars.slice(0, Math.floor(chars.length / 2)).join('').length;
+    const boundary = source.text.lastIndexOf(' ', cut);
+    if (boundary > cut / 2) cut = boundary + 1;
+    const pieces = [source.text.slice(0, cut), source.text.slice(cut)];
+    if (pieces.some(text => !text.trim())) return null;
+    return pieces.map((text, i) => ({id:`${source.id}-${i}`,text,segments:(source.segments ?? []).filter(s=>text.includes(s.text))}));
+}
 async function fingerprint(value) {
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value)));
     return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
@@ -103,7 +114,7 @@ export function buildAnalysis(maps, summary, windows, warnings = [], segments = 
         flashcards: unique(packets.flatMap(p => p.flashcards), f => JSON.stringify([f.q, f.a])),
         examSignals: packets.flatMap(p => p.examSignals.map(e => e.label)), examEvidence: packets.flatMap(p => p.examSignals),
         scores: {}, sections, conceptGraph: {nodes, edges}, dna, timestamps,
-        warnings: [...new Set([...warnings, ...maps.filter(m=>m.packet.omitted?.length).map(m=>`Section ${Number(m.id.slice(1))+1}: notes are available; omitted optional material that was missing or failed validation: ${m.packet.omitted.join(', ')}.`), 'Clarity, density and pace scores are omitted: no validated scoring method is available.',
+        warnings: [...new Set([...warnings, ...maps.flatMap((m,index)=>m.packet.omitted?.length ? [`Section ${index+1}: notes are available; omitted optional material that was missing or failed validation: ${m.packet.omitted.join(', ')}.`] : []), 'Clarity, density and pace scores are omitted: no validated scoring method is available.',
             ...(timestamps.length ? [] : ['No unambiguous evidence timestamps are available.']), 'Evidence quotes are checked against the transcript; their interpretation still requires review.'])]};
 }
 
@@ -117,16 +128,29 @@ export async function runPipeline(input, onProgress = () => {}, options = {}) {
     const signal = settings.signal ?? options.signal, request = options.complete ?? complete;
     throwIfAborted(signal);
     const windows = splitSources(assembled.sources?.length ? assembled.sources : [{text: assembled.text, segments: assembled.segments ?? []}]);
-    const key = await fingerprint({version: 2, language, selection: {providerId: selection.providerId, model: selection.model, baseUrl: selection.baseUrl}, windows});
+    const includeExtras = settings.includeExtras ?? options.includeExtras ?? true;
+    const key = await fingerprint({version: 2, language, selection: {providerId: selection.providerId, model: selection.model, baseUrl: selection.baseUrl}, windows, ...(includeExtras ? {} : {includeExtras:false})});
     let checkpoint = {version: 1, key, maps: [], merges: []};
     if (options.checkpoint?.key === key) {
         try {checkpoint = validateCheckpoint(options.checkpoint);} catch { /* Discard an unusable checkpoint, preserving transcript. */ }
     }
+    const validSplits = [];
+    for (const id of checkpoint.splits ?? []) {
+        const index = windows.findIndex(w=>w.id===id);
+        const children = index < 0 ? null : smallerSources(windows[index]);
+        if (children && windows.length < 10000) {windows.splice(index,1,...children);validSplits.push(id);}
+    }
+    if (checkpoint.splits) checkpoint.splits = validSplits;
     // Revalidate saved extraction against its current source before trusting imported checkpoints.
+    const savedMapCount = checkpoint.maps.length;
     checkpoint.maps = unique(checkpoint.maps.filter(m => {
         const source = windows.find(w => w.id === m.id); if (!source) return false;
         try {validatePacket(m.packet, [source]); return true;} catch {return false;}
     }), m => m.id);
+    // Version-one checkpoints predate merge input hashes. Their original key
+    // already binds the full sources/model/language. Grandfather them only if
+    // every original extraction survives validation and no split plan exists.
+    const reuseLegacyMerges = !checkpoint.splits?.length && savedMapCount === checkpoint.maps.length && checkpoint.maps.length === windows.length;
     if (checkpoint.maps.length !== windows.length) checkpoint.merges = [];
     const save = async () => {
         throwIfAborted(signal);
@@ -141,7 +165,7 @@ export async function runPipeline(input, onProgress = () => {}, options = {}) {
             const choices = payload.stage === 'extract' ? evidenceChoices(payload.source) : null;
             const baseSchema = choices ? evidenceRepairSchema(choices) : outputSchema;
             const schema = selection.providerId === 'gemini' && payload.stage === 'extract' ? geminiStudySchema(baseSchema) : baseSchema;
-            const system = `${rules}\n${languages[language]}\n${choices ? evidenceRepairPrompt : systemPrompt}${attempt ? `\nThe previous output failed validation: ${repairReason}` : ''}`;
+            const system = `${rules}\n${languages[language]}\n${choices ? evidenceRepairPrompt : systemPrompt}${choices && !includeExtras ? '\nCore notes only: return empty arrays for topics, concepts, flashcards, examSignals and links. Spend the output budget on the notes and supporting references.' : ''}${attempt ? `\nThe previous output failed validation: ${repairReason}` : ''}`;
             let userPrompt = JSON.stringify(choices ? {...payload, excerpts:choices} : payload);
             const requestSize = () => byteLength(system) + byteLength(userPrompt) + byteLength(JSON.stringify(schema));
             // The excerpts already contain all source text. Avoid duplicating it
@@ -157,12 +181,13 @@ export async function runPipeline(input, onProgress = () => {}, options = {}) {
             }
             if (requestSize() > LIMITS.requestBytes) throw new Error('Analysis request exceeds its byte budget.');
             try {
-                const raw = await request({...selection, systemPrompt: system, userPrompt, jsonMode: true, outputSchema:schema, signal});
+                const raw = await request({...selection, systemPrompt: system, userPrompt, jsonMode: true, outputSchema:schema, signal, operation:payload.stage});
                 throwIfAborted(signal);
                 // Bound parsing work, then apply the content budget without indentation overhead.
                 if (byteLength(raw) > LIMITS.packetBytes * 4) throw new TypeError('Response exceeds its byte budget.');
                 const parsed = parseStudyJSON(raw);
                 if (payload.stage !== 'extract' && byteLength(JSON.stringify(parsed)) > LIMITS.packetBytes) throw new TypeError('Response exceeds its byte budget.');
+                if (choices && !includeExtras) for (const field of ['topics','concepts','flashcards','examSignals','links']) parsed[field] = [];
                 return validator(choices ? resolveEvidenceChoices(parsed,payload.source,choices) : parsed);
             } catch (error) {
                 throwIfAborted(signal);
@@ -170,21 +195,29 @@ export async function runPipeline(input, onProgress = () => {}, options = {}) {
                 // A rejected HTTP request has no output to repair. Preserve its status and action.
                 if (Number.isInteger(error.status) && error.status >= 400) {error.operation=payload.stage; throw error;}
                 if (!(error instanceof SyntaxError || error instanceof TypeError || error.kind === 'response')) throw error;
-                if (attempt) throw Object.assign(new Error(`The provider returned invalid study output twice. ${validationReason(error)} Your saved transcript is retained.`), {kind: 'study_output',providerId:selection.providerId,validationIssue:safeValidationIssue(error.validationIssue),outputIssue:error.outputIssue,outputAttempt:2,firstOutputIssue});
+                if (attempt) throw Object.assign(new Error(`The provider returned invalid study output twice. ${validationReason(error)} Your saved transcript is retained.`), {kind: 'study_output',operation:payload.stage,providerId:selection.providerId,validationIssue:safeValidationIssue(error.validationIssue),outputIssue:error.outputIssue,outputAttempt:2,firstOutputIssue,canSplit: error.outputIssue === 'malformed_json' || (error.validationIssue?.field === 'notes' && error.validationIssue?.code === 'too_long') || /did not finish a complete text response|exceeds its (?:size|byte) budget/.test(error.message)});
                 repairReason = validationReason(error); firstOutputIssue=error.outputIssue ?? (error.validationIssue?'schema':'validation');
                 onProgress(payload.stage === 'extract' ? 'The first notes response failed validation. Regenerating this section once…' : 'The first overview response failed validation. Regenerating this overview once…');
             }
         }
     };
-    for (const source of windows) {
+    for (let index = 0; index < windows.length; index++) {
+        const source = windows[index];
         throwIfAborted(signal);
         if (checkpoint.maps.some(m => m.id === source.id)) continue;
-        onProgress(`Extracting notes ${Number(source.id.slice(1)) + 1}/${windows.length}...`);
+        onProgress(`Extracting notes ${index + 1}/${windows.length}...`);
         let packet;
         try {
-            packet = await ask(evidenceRepairPrompt, {stage: 'extract', source: {id: source.id, text: source.text}, context:neighbouringContext(windows, Number(source.id.slice(1)))}, value => acceptGeneratedPacket(value, [source]), PACKET_OUTPUT_SCHEMA);
+            packet = await ask(evidenceRepairPrompt, {stage: 'extract', source: {id: source.id, text: source.text}, context:neighbouringContext(windows, index)}, value => acceptGeneratedPacket(value, [source]), PACKET_OUTPUT_SCHEMA);
         } catch (error) {
-            error.section = Number(source.id.slice(1)) + 1; error.totalSections = windows.length;
+            const children = error.kind === 'study_output' && error.canSplit && windows.length < 10000 ? smallerSources(source) : null;
+            if (children) {
+                checkpoint.splits ??= []; checkpoint.splits.push(source.id);
+                checkpoint.merges = []; windows.splice(index,1,...children);
+                onProgress('This section could not be completed. Trying two smaller sections; completed notes are saved.');
+                await save(); index--; continue;
+            }
+            error.section = index + 1; error.totalSections = windows.length;
             throw error;
         }
         checkpoint.maps.push({id: source.id, packet}); await save();
@@ -196,12 +229,14 @@ export async function runPipeline(input, onProgress = () => {}, options = {}) {
             throwIfAborted(signal);
             if (i + 1 === nodes.length) {next.push(nodes[i]); continue;}
             const id = `merge-${level}-${i / 2}`;
-            let merged = checkpoint.merges.find(m => m.id === id);
+            const inputKey = await fingerprint(nodes.slice(i,i+2));
+            let merged = checkpoint.merges.find(m => m.id === id && (m.inputKey === inputKey || reuseLegacyMerges && m.inputKey === undefined));
+            if (merged && merged.inputKey === undefined) {merged.inputKey = inputKey; await save();}
             if (!merged) {
                 onProgress(`Combining section overviews, level ${level + 1}...`);
                 const output = await ask('Combine the two note summaries into a balanced overview. Cover both inputs, including later material. All detailed section notes remain separately available. Return only {"summary":"overview"}, maximum 2500 UTF-8 bytes for summary.',
                     {stage: 'merge', nodes: nodes.slice(i, i + 2)}, validateOverview, OVERVIEW_OUTPUT_SCHEMA);
-                merged = {id, ...output}; checkpoint.merges.push(merged); await save();
+                merged = {id, ...output, inputKey}; checkpoint.merges = checkpoint.merges.filter(m=>m.id!==id); checkpoint.merges.push(merged); await save();
             }
             next.push(merged);
         }

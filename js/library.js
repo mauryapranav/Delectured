@@ -1,4 +1,5 @@
 import {refreshRecent} from './shell.js';
+import {withNotesLock} from './request-budget.js';
 /**
  * js/library.js
  * Logic for the library page (listing, deleting, export, import).
@@ -94,7 +95,7 @@ async function importLibrary(e) {
     const reader = new FileReader();
     reader.onload = async (ev) => {
         try {
-            await importLibraryData(JSON.parse(ev.target.result), {overwrite: document.getElementById('import-conflicts').value === 'overwrite'});
+            await withNotesLock(()=>importLibraryData(JSON.parse(ev.target.result), {overwrite: document.getElementById('import-conflicts').value === 'overwrite'}));
             await loadLibrary(); refreshRecent();
             alert('Import successful!');
         } catch (err) {

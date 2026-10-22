@@ -23,6 +23,12 @@ export function initProviderSettings() {
     const intro = document.createElement('p'); intro.className = 'drawer-desc';
     intro.textContent = 'Choose who transcribes your audio and who creates your notes. They can be different providers.';
     choices.append(intro);
+    const rememberLabel = document.createElement('label');
+    const remember = document.createElement('input'); remember.type = 'checkbox'; remember.id = 'remember-provider-keys';
+    rememberLabel.append(remember, ' Remember API keys in this browser');
+    const storageNote = document.createElement('p'); storageNote.className = 'drawer-desc';
+    storageNote.textContent = 'Unchecked: keys are kept for this tab session. Checked: keys remain on this browser until removed. Browser extensions and anyone using this profile may access saved keys.';
+    choices.append(rememberLabel, storageNote);
     for (const [id, label, capability] of [['transcription-provider', 'Transcription provider', 'transcription'], ['notes-provider', 'Notes provider', 'completion']]) {
         const select = field(choices, label, id, 'select');
         for (const provider of providers.filter(p => p[capability])) {
@@ -49,6 +55,12 @@ export function initProviderSettings() {
         }
     }
     const baseUrl = field(choices, 'Custom API base URL (including /v1 if required)', 'compatible-base-url', 'url');
+    const destination = document.createElement('p'); destination.className = 'drawer-desc';
+    baseUrl.parentElement.append(destination);
+    function showDestination() {
+        try { destination.textContent = `Your custom API key and lecture content will be sent to ${new URL(baseUrl.value).origin}. Only use a server you trust.`; }
+        catch { destination.textContent = 'Enter the server address to see where your custom API key and lecture content will be sent.'; }
+    }
     const selections = () => ({transcription:document.getElementById('transcription-provider').value,
         completion:document.getElementById('notes-provider').value});
     const pickers=providers.map(provider=>attachModelPicker(provider,groups.get(provider.id),{baseUrl,selections}));
@@ -66,6 +78,7 @@ export function initProviderSettings() {
     for (const id of ['transcription-provider','notes-provider']) document.getElementById(id).addEventListener('change',()=>{pickers.forEach(p=>p.reset());updateFields();});
     baseUrl.addEventListener('input', () => {
         if (baseUrl.value.replace(/\/+$/, '') !== loadedCustomUrl) document.getElementById('key-compatible').value = '';
+        showDestination();
     });
     const note = document.createElement('p'); note.className = 'drawer-desc';
     note.textContent = 'Enter a key, then use Find models & suggest to avoid typing model names. Suggestions favor known task-compatible models; they are not a guarantee of quality, price or account access. Provider limits apply. Keys stay in this browser and are sent only to the chosen provider. Gemini audio has no timestamps.';
@@ -76,6 +89,7 @@ export function initProviderSettings() {
         load() {
             pickers.forEach(p=>p.reset());
             const config = getConfig();
+            remember.checked = config.rememberKeys;
             for (const provider of providers) {
                 document.getElementById(`key-${provider.id}`).value = config.keys[provider.id] || '';
                 for (const capability of ['transcription', 'completion']) {
@@ -86,6 +100,7 @@ export function initProviderSettings() {
             document.getElementById('transcription-provider').value = config.transcriptionProvider;
             document.getElementById('notes-provider').value = config.notesProvider;
             baseUrl.value = loadedCustomUrl = config.compatibleBaseUrl;
+            showDestination();
             updateFields();
             refreshSelects(choices);
         },
@@ -101,7 +116,7 @@ export function initProviderSettings() {
                     if (input && selected[capability] === provider.id) models[provider.id][capability] = input.value;
                 }
             }
-            saveConfig({keys, models, ...(Object.values(selected).includes('compatible') ? {compatibleBaseUrl: baseUrl.value.trim()} : {}),
+            saveConfig({keys, models, rememberKeys: remember.checked, ...(Object.values(selected).includes('compatible') ? {compatibleBaseUrl: baseUrl.value.trim()} : {}),
                 transcriptionProvider: document.getElementById('transcription-provider').value,
                 notesProvider: document.getElementById('notes-provider').value});
         },

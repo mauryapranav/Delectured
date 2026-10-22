@@ -1,10 +1,25 @@
 /**
  * js/config.js
- * Manages configuration and API keys in localStorage.
+ * Stores settings locally; credentials use session storage unless explicitly remembered.
  */
 
 import {PROVIDER_IDS, getProviderMetadata, validateBaseUrl} from './providers/catalog.js';
 const CONFIG_KEY = 'delectured_config';
+const SESSION_KEY = 'delectured_session_keys';
+const memoryKeys = new WeakMap();
+
+function sessionKeys() {
+    if (memoryKeys.has(globalThis.localStorage)) return memoryKeys.get(globalThis.localStorage);
+    try {
+        const value = JSON.parse(sessionStorage.getItem(SESSION_KEY) || '{}');
+        return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    }
+    catch { return memoryKeys.get(globalThis.localStorage) || {}; }
+}
+function writeSessionKeys(value) {
+    memoryKeys.set(globalThis.localStorage, value);
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(value)); } catch { /* In-memory keys remain usable in this tab. */ }
+}
 
 const DEFAULT_CONFIG = {
     keys: {
@@ -20,7 +35,12 @@ export function getConfig() {
     try {
         const stored = localStorage.getItem(CONFIG_KEY);
         if (stored) {
-            return mergeConfig(JSON.parse(stored));
+            const value = JSON.parse(stored);
+            // Keep existing saved credentials usable; new installations default to session-only.
+            const rememberKeys = value.rememberKeys ?? Object.values(value.keys || {}).some(Boolean);
+            const session = sessionKeys();
+            const keys = !rememberKeys && session.binding === value.keySessionBinding ? session.keys : value.keys;
+            return mergeConfig({...value, keys, rememberKeys});
         }
     } catch (e) {
         console.warn('Failed to load provider settings from local storage.');
@@ -65,14 +85,20 @@ function mergeConfig(value, current = DEFAULT_CONFIG) {
     const compatibleBaseUrl = suppliedUrl ? validateBaseUrl(suppliedUrl) : '';
     // A stored custom key is bound to its base URL; changing the destination clears it.
     if (compatibleBaseUrl !== previousUrl && !Object.hasOwn(value.keys ?? {}, 'compatible')) keys.compatible = '';
-    return {keys, language, defaultProvider, transcriptionProvider, notesProvider, models, compatibleBaseUrl};
+    const rememberKeys = value.rememberKeys ?? current.rememberKeys ?? false;
+    if (typeof rememberKeys !== 'boolean') throw new TypeError('Invalid key storage preference.');
+    return {keys, language, defaultProvider, transcriptionProvider, notesProvider, models, compatibleBaseUrl, rememberKeys};
 }
 
 export function saveConfig(newConfig) {
     try {
         const current = getConfig();
         const updated = mergeConfig(newConfig, current);
-        localStorage.setItem(CONFIG_KEY, JSON.stringify(updated));
+        const previous = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
+        const binding = current.rememberKeys === updated.rememberKeys && current.compatibleBaseUrl === updated.compatibleBaseUrl
+            ? previous.keySessionBinding || globalThis.crypto.randomUUID() : globalThis.crypto.randomUUID();
+        localStorage.setItem(CONFIG_KEY, JSON.stringify({...updated, keys: updated.rememberKeys ? updated.keys : {}, keySessionBinding: binding}));
+        writeSessionKeys(updated.rememberKeys ? {} : {keys: updated.keys, binding});
         return updated;
     } catch (e) {
         console.error('Failed to save provider settings to local storage.');

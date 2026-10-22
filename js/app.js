@@ -3,7 +3,7 @@
  * Main UI Orchestrator for DeLectured v3
  */
 import { getConfig, setLanguage } from './config.js';
-import {validateProviderConfiguration, getProviderSelection} from './providers/index.js';
+import {validateProviderConfiguration, getProviderSelection, complete} from './providers/index.js';
 import {initProviderSettings} from './provider-settings.js';
 import {Session} from './session.js';
 import {validateUpload, uploadError} from './upload.js';
@@ -12,7 +12,9 @@ import {initQueueControls} from './queue-controls.js';
 import {refreshNotesSelection} from './notes-recovery.js';
 import {initProcessingFlow,processingIssue} from './processing-flow.js';
 import {watchAppUpdates,showAppUpdate} from './app-updates.js';
-import { runPipeline } from './pipeline.js';
+import { runPipeline, splitSources } from './pipeline.js';
+import {createRequestBudget,newUsage,withNotesLock} from './request-budget.js';
+import {chooseUploadPlan} from './upload-plan.js';
 import {assembleTranscript} from './transcript.js';
 import * as store from './store.js';
 import {escapeHTML} from './safe-render.js';
@@ -38,6 +40,7 @@ let reportActionPending = false;
 let recoveryControls;
 let processingFlow;
 let pendingUpload=null;
+let uploadPreparing=false;
 let stopPromise = null;
 let stopMeter = () => {};
 
@@ -73,7 +76,7 @@ async function initializeApp() {
         return;
     }
     switchView(new URL(location.href).searchParams.has('capture') ? 'input-section' : 'welcome-section');
-    const busy = () => session.busy || Boolean(reportController) || reportActionPending;
+    const busy = () => uploadPreparing || session.busy || Boolean(reportController) || reportActionPending;
     const shell = initShell({busy});
     // 2. Keys Drawer
     const settings = initKeysDrawer();
@@ -93,15 +96,24 @@ async function initializeApp() {
     document.getElementById('stop-record-btn')?.addEventListener('click', () => stopRecording().catch(showProcessingError));
     document.getElementById('discard-record-btn')?.addEventListener('click', () => discardRecording().catch(showProcessingError));
     recoveryControls = initQueueControls(queue, {
+        exclusive:withNotesLock,
         beforeRetry: async id => {
             if (reportController || reportActionPending) throw Object.assign(new Error('A step is already running. Wait for it to finish or pause notes generation.'), {kind: 'blocked'});
             if (session.busy && (session.active?.id !== id || session.active.state !== 'interrupted')) throw Object.assign(new Error('Stop the current session before recovery.'), {kind: 'blocked'});
+            const saved=await store.getLecture(id);
+            let extended=false;
+            if(saved?.audioUsage && saved.audioUsage.requests>=saved.audioUsage.limit) {
+                if(!confirm(`This upload has reserved ${saved.audioUsage.requests} of ${saved.audioUsage.limit} transcription attempts. Allow up to 8 more? Completed transcript sections will be reused. Provider charges may apply.`))throw Object.assign(new Error('Transcription allowance was not extended.'),{kind:'budget'});
+                await store.updateLecture(id,{audioUsage:{...saved.audioUsage,limit:Math.min(1000000,saved.audioUsage.limit+8)}});
+                extended=true;
+            }
             reportActionPending=true;
             currentLectureId = id; switchView('recording-section');
             processingFlow.update('transcribe','Checking saved audio and transcript…');
+            return extended;
         },
         recover: (id, options) => session.recover(id, options),
-        recovered: (id, options) => generateFinalReport(id, options),
+        recovered: (id, options) => generateFinalReportLocked(id, options),
         failed:showProcessingError,
         settled:()=>{reportActionPending=false;},
         discard: id => id === currentLectureId ? discardRecording() : queue.discard(id),
@@ -334,12 +346,19 @@ function onSessionState(event) {
     }
 }
 async function startRecording() {
-    if (session.busy || reportController || reportActionPending) return;
+    if (session.busy || reportController || reportActionPending || uploadPreparing) return;
     currentLectureId=null; processingFlow.update('prepare','Checking microphone and provider settings…'); switchView('recording-section');
     try {await session.start(providerOptions());}
     catch (error) {if (error.name === 'AbortError' && !currentLectureId) return; await showProcessingError(error);}
 }
 async function startUpload(file) {
+    if(uploadPreparing)return;
+    uploadPreparing=true;
+    try {return await withNotesLock(()=>startUploadUnlocked(file));}
+    catch(error){await showProcessingError(error);}
+    finally {uploadPreparing=false;}
+}
+async function startUploadUnlocked(file) {
     if (session.busy || reportController || reportActionPending) {notice(file===pendingUpload?'Finish the current work first. Your queued file remains available in Settings.':'Finish the current work first, then select this file again.');return;}
     pendingUpload=null;document.getElementById('pending-upload-notice')?.remove();document.getElementById('save-keys-btn').textContent='Save settings';
     currentLectureId=null; processingFlow.update('prepare','Checking audio and provider settings…'); switchView('recording-section');
@@ -360,9 +379,23 @@ async function startUpload(file) {
             return;
         }
         pendingUpload=null;
-        const id = await session.upload(file, options); await generateFinalReport(id);
+        const plan=await chooseUploadPlan(file,await store.getAllLectures());
+        if(!plan){switchView('input-section');return;}
+        if(plan.existing){
+            uploadPreparing=false;
+            currentLectureId=plan.existing.id;
+            if(plan.existing.analysisStatus==='ready'){renderLecture(await openLecture(currentLectureId));switchView('result-section');}
+            else {
+                const saved=plan.existing, stage=saved.uploadSource?.complete?'notes':'transcribe';
+                switchView('recording-section');document.getElementById('live-transcript').textContent=saved.transcript;
+                processingFlow.fail(saved.processingIssue??processingIssue(new DOMException('Paused.','AbortError'),stage),{transcriptSaved:!!saved.transcript,transcriptComplete:stage==='notes',canRetry:true});
+                await recoveryControls.refresh();notice('Use Resume saved work below. Completed audio and notes will be reused.');
+            }
+            return;
+        }
+        const id = await session.upload(file, {...options,includeExtras:plan.includeExtras,transcriptionRequestLimit:Math.ceil(plan.seconds/300)+8}); uploadPreparing=false;await generateFinalReportLocked(id);
     }
-    catch (error) {if (error.name === 'AbortError' && !currentLectureId) return; await showProcessingError(error);}
+    catch (error) {uploadPreparing=false;if (error.name === 'AbortError' && !currentLectureId) return; await showProcessingError(error);}
 }
 function updateTimer() {
     const ms = Date.now() - recordStartTime;
@@ -384,16 +417,20 @@ async function discardRecording() {
     recoveryControls?.setBusy(false);
 }
 
-async function generateFinalReport(lectureId = currentLectureId, {retry = false} = {}) {
+async function generateFinalReport(lectureId = currentLectureId, options = {}) {
+    return withNotesLock(()=>generateFinalReportLocked(lectureId,options));
+}
+async function generateFinalReportLocked(lectureId = currentLectureId, {retry = false, reset = false} = {}) {
     if (lectureId !== currentLectureId) return;
     if (reportController) throw new Error('A report is already being prepared.');
     const controller = new AbortController(); reportController = controller;
     const signal = controller.signal;
+    document.getElementById('partial-notes-preview')?.remove();
     processingFlow.update('notes','Checking saved transcript and notes settings…');
     recoveryControls.setBusy(true);
     const check = () => {if (signal.aborted || lectureId !== currentLectureId) throw new DOMException('Cancelled.', 'AbortError');};
     try {
-        if (retry) {await refreshNotesSelection(lectureId); check();}
+        if (retry || reset) {await refreshNotesSelection(lectureId,store,{reset}); check();}
         const lecture = await store.getLecture(lectureId); check();
         if (lecture.uploadSource && !lecture.uploadSource.complete) throw uploadError('source_required','Choose the original recording to finish importing before creating notes.');
         const allChunks = await store.getAllChunks(lectureId); check();
@@ -402,18 +439,34 @@ async function generateFinalReport(lectureId = currentLectureId, {retry = false}
             : {text: lecture.transcript, segments: lecture.segments, warnings: lecture.captureGaps?.length ? ['Recording contains an unknown capture gap.'] : []};
         const fullText = assembled.text;
         if (!fullText.trim()) throw new Error('No speech was transcribed. Retained audio remains available in recovery.');
+        const count=splitSources(assembled.sources?.length?assembled.sources:[{text:fullText}]).length;
+        let usage=lecture.notesUsage??newUsage(count);
+        if(usage.requests>=usage.limit || usage.retries>=usage.retryLimit) {
+            if(!confirm(`This lecture has used ${usage.requests} notes requests and ${usage.retries} network/rate-limit retries. Allow up to 10 more requests and 3 more network/rate-limit retries? Completed work will be reused. Provider charges may apply.`))throw Object.assign(new Error('Request allowance was not extended.'),{kind:'budget'});
+            usage={...usage,limit:Math.min(1000000,usage.limit+10),retryLimit:Math.min(1000000,usage.retryLimit+3)};
+        }
+        await store.updateLecture(lectureId,{notesUsage:usage},{signal});check();
+        let usagePanel=document.getElementById('notes-usage');
+        if(!usagePanel){usagePanel=document.createElement('p');usagePanel.id='notes-usage';usagePanel.className='quiet';document.getElementById('processing-flow').append(usagePanel);}
+        const displayUsage=value=>{usagePanel.textContent=`Notes usage: ${value.requests}/${value.limit} requests; ${value.retries}/${value.retryLimit} network/rate-limit retries. Provider-reported tokens: ${value.inputTokens} input, ${value.outputTokens} output (may be incomplete). Estimated first-pass requests: ${Math.max(1,count*2-1)}. No price estimate; account limits still apply.`;};
+        displayUsage(usage);
+        const governor=createRequestBudget({usage,signal,persist:async value=>{await store.updateLecture(lectureId,{notesUsage:value},{signal});displayUsage(value);},progress:msg=>processingFlow.update('notes',msg)});
         document.getElementById('transcript-content').innerHTML = escapeHTML(fullText);
         document.getElementById('live-transcript').textContent=fullText;
         let warning = document.getElementById('capture-gap-warning');
         if (!warning) {warning = document.createElement('p'); warning.id = 'capture-gap-warning'; document.getElementById('transcript-content').before(warning);}
         warning.textContent = lecture.captureGaps?.length ? 'This recording was interrupted or only partly imported. Some audio may be missing; gap duration is unknown.' : '';
-        await store.updateLecture(lectureId, {transcript: fullText, segments: assembled.segments, transcriptSource: 'assembled', analysisStatus: 'processing',processingIssue:undefined}, {signal}); check();
-        const results = await runPipeline({transcript: assembled, language: lecture.language}, msg => {
+        await store.updateLecture(lectureId, {transcript: fullText, segments: assembled.segments, transcriptSource: 'assembled', status:'processing', analysisStatus: 'processing',processingIssue:undefined}, {signal}); check();
+        const results = await runPipeline({transcript: assembled, language: lecture.language,includeExtras:lecture.includeExtras??true}, msg => {
             if (!signal.aborted && lectureId === currentLectureId) processingFlow.update('notes',msg);
         }, {selection: lecture.providerSelections?.completion ?? getProviderSelection('completion', {providerId: 'groq'}), signal,
-            checkpoint: lecture.analysisCheckpoint,
+            checkpoint: lecture.analysisCheckpoint,complete:request=>governor.run(request,complete),
             onCheckpoint: async (analysisCheckpoint, analysis) => {
                 check(); await store.updateLecture(lectureId, {analysisCheckpoint, analysis, analysisStatus: 'partial'}, {signal});
+                let preview=document.getElementById('partial-notes-preview');
+                if(!preview){preview=document.createElement('details');preview.id='partial-notes-preview';const title=document.createElement('summary');title.textContent='Read completed notes while processing';preview.append(title,document.createElement('div'));document.getElementById('processing-flow').append(preview);}
+                preview.lastElementChild.textContent=analysis.sections.map(s=>s.notes).join('\n\n');
+                preview.lastElementChild.style.whiteSpace='pre-wrap';preview.lastElementChild.style.maxHeight='28rem';preview.lastElementChild.style.overflow='auto';
             }});
         check();
         processingFlow.update('save','Notes checked. Saving your study material in this browser…');
@@ -427,7 +480,7 @@ async function showProcessingError(error, lectureId = currentLectureId, stage = 
     let saved;
     try {
         saved = lectureId && await store.getLecture(lectureId);
-        if (saved) await store.updateLecture(lectureId, {status: 'failed', analysisStatus: saved.analysisCheckpoint?.maps.length ? 'partial' : 'failed',processingIssue:issue});
+        if (saved && issue.kind!=='blocked') await store.updateLecture(lectureId, {status: 'failed', analysisStatus: saved.analysisCheckpoint?.maps.length ? 'partial' : 'failed',processingIssue:issue});
     } catch { /* The original failure remains visible even if storage is unavailable. */ }
     if (lectureId === currentLectureId) {
         switchView('recording-section');
@@ -456,9 +509,8 @@ function initReportControls() {
         reportActionPending = true;
         try {
         processingFlow.update('notes','Preparing to regenerate notes from your saved transcript…');
-        await refreshNotesSelection(currentLectureId, store, {reset:true});
         switchView('recording-section');
-        await generateFinalReport();
+        await generateFinalReport(currentLectureId,{reset:true});
         } finally {reportActionPending = false;recoveryControls.setBusy(false);}
     });
     document.getElementById('lecture-question-form').addEventListener('submit', async event => {
