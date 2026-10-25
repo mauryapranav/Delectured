@@ -1,24 +1,30 @@
-# Static deployment, checked 2026-10-16
+# Static deployment
 
-Target hosting cost: INR 0/month on the chosen free plan; no paid backend, domain or credit-card-dependent service is required. Provider inference is separate and subject to each provider's quota/pricing. No deployment was performed.
+Live site: **[https://mauryapranav.github.io/Delectured/](https://mauryapranav.github.io/Delectured/)**.
 
-## Student Pack first
+## GitHub Pages
 
-The [GitHub Student Developer Pack](https://education.github.com/pack) includes GitHub benefits and lists GitHub Pages. [GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages) supports static HTML/CSS/JavaScript. It is a suitable alternative using your existing GitHub account; no additional student cloud credit or expiring server is needed.
+The repository uses [deploy-pages.yml](.github/workflows/deploy-pages.yml). On a push to `main` or a manual workflow run, it uses Node.js 24.13.0, installs locked dependencies, runs the test suite, builds the app and publishes **only `dist`**.
 
-## Cloudflare Pages
+Repository Pages settings must use **GitHub Actions** as the build and deployment source. Provider API keys belong in the user's browser Settings; no provider credentials are required by this workflow.
 
-Cloudflare advertises a [free starting plan without a credit card](https://www.cloudflare.com/plans/). Its [static HTML guide](https://developers.cloudflare.com/pages/framework-guides/deploy-anything/) supports this project. Free Pages currently allows 500 builds/month, 20,000 files and 25 MiB per asset according to its [limits](https://developers.cloudflare.com/pages/platform/limits/). Account eligibility/onboarding was not exercised here; if a payment prompt appears, do not enable paid products.
+## Local preview or another static host
 
-1. Run `npm ci`, `npm test`, then `npm run build` locally.
-2. For a Pages Git integration, set framework to None, build command to `npm run build`, and output directory to `dist`. Use Node 24.13.0 for reproducibility. Alternatively upload the generated dist assets using Pages Direct Upload.
-3. Use the provided pages.dev hostname. Do not add Functions, Workers compute, R2, databases, environment API keys or a paid domain.
-4. Before release, test microphone permission and one real provider request on the HTTPS deployment using your own credentials. Browser CORS support can differ from mocked contracts.
+```sh
+npm ci
+npm test
+npm run build
+python -m http.server 8000 --directory dist
+```
 
-The build is an allowlist: old backend/v2 files, tests, documentation, configuration and credentials are excluded. It refuses unexpected existing output files instead of silently publishing them. A content-derived service-worker cache version ensures changed builds update the shell. Waiting updates activate after old clients close; export RAM audio before closing.
+Open [localhost:8000](http://localhost:8000/). The preview command needs Python 3; any static server can serve the generated directory. On another static host, use `npm run build` as the build command and `dist` as the output directory. Use HTTPS for microphone access outside localhost.
 
-## GitHub Pages alternative
+Do not serve repository-root HTML. The build assembles the shared page shell, packages the local runtime dependencies and versions the offline cache. It excludes tests, documentation, screenshots and assistant workspace files from the deployed site.
 
-Upload only generated dist contents through the Pages deployment mechanism; do not publish the repository root. A `.nojekyll` file is included. Relative URLs support a repository subpath. Pages publication is public even when source visibility differs. Keep credentials in browser settings only.
+## Updates and moving a library
 
-Changing origin creates a separate browser storage area: export the old site's JSON Library before moving, then import it on the new origin. Pending audio is not included in backups; finish, export or discard it separately.
+Finish active work and export RAM-only audio before closing tabs to activate an app update. Saved browser data should not be cleared as an update step.
+
+Changing the hostname, protocol or port creates a separate browser storage area. Export a JSON backup on the old origin and import it on the new origin. Backups do not contain pending audio or provider keys; export retained audio separately and enter keys in the new site's Settings.
+
+See [storage and recovery](README.md#storage-privacy-and-offline-use) and [testing and deployment](README.md#testing-and-deployment) for the remaining boundaries. Static hosting does not remove the selected AI providers' limits or charges.

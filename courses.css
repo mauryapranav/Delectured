@@ -1,0 +1,22 @@
+.courses-section { margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--line); }
+.course-actions { display:flex; flex-wrap:wrap; gap:.65rem; align-items:center; margin:1rem 0; }
+.course-card { padding:1rem 0; border-bottom:1px solid var(--line); overflow-wrap:anywhere; }
+.course-card ul { padding-left:1.3rem; }
+.course-workspace { margin-top:1.5rem; }
+.course-workspace fieldset { margin:1rem 0; max-height:22rem; overflow:auto; }
+.course-choice { display:flex; gap:.65rem; align-items:center; padding:.4rem; overflow-wrap:anywhere; }
+.course-choice input { width:auto; flex:0 0 auto; }
+.course-workspace input[type=checkbox] { width:auto; margin-right:.5rem; }
+.courses-section input[type=checkbox] { accent-color:var(--accent); }
+.course-workspace input[type=text] { display:block; width:100%; margin-top:.4rem; }
+.course-workspace [hidden] { display:none; }
+.courses-section button { border:1px solid var(--line); border-radius:4px; padding:9px 13px; margin:4px 4px 4px 0; color:var(--accent); font:inherit; }
+.course-workspace input[type=text],.course-questions textarea,.rename-dialog input { box-sizing:border-box; width:100%; max-width:100%; padding:10px; background:var(--sheet); color:var(--ink); border:1px solid var(--line); font:inherit; }
+.course-questions textarea { display:block; resize:vertical; margin:8px 0; }
+.course-questions fieldset { border:1px solid var(--line); padding:12px; }
+.course-questions fieldset label { display:flex; align-items:center; gap:8px; padding:6px 0; overflow-wrap:anywhere; }
+.course-questions input[type=checkbox] { flex:0 0 auto; }
+.course-questions figure { margin:14px 0; padding:12px; border-left:3px solid var(--accent); background:var(--accent-soft); overflow-wrap:anywhere; }
+.course-questions blockquote { margin:8px 0 0; }
+#rename-lecture-visible { margin:6px 0 12px; }
+@media print { #rename-lecture-visible { display:none!important; } }

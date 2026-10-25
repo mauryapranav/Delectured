@@ -23,7 +23,7 @@ export async function refreshRecent(currentId = new URL(location.href).searchPar
         }
     } catch {nav.textContent = 'Recent lectures are unavailable.';}
 }
-export function initShell({busy = () => false} = {}) {
+export function initShell({busy = () => false, blocked = () => notice('Finish or discard the current recording or report before opening another page.')} = {}) {
     initIcons();
     refreshSelects();
     const media = matchMedia('(max-width: 900px)'), toggle = document.getElementById('sidebar-toggle'), sidebar = document.getElementById('app-sidebar');
@@ -57,7 +57,7 @@ export function initShell({busy = () => false} = {}) {
         if (!link || link.target === '_blank' || link.download || !busy()) return;
         const url = new URL(link.href);
         if (url.origin === location.origin && (url.pathname !== location.pathname || url.search !== location.search || !url.hash)) {
-            e.preventDefault(); notice('Finish or discard the current recording or report before opening another page.');
+            e.preventDefault(); blocked();
         }
     }, true);
     globalThis.addEventListener('beforeunload', e => {if (busy()) {e.preventDefault(); e.returnValue = '';}});

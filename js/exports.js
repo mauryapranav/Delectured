@@ -3,8 +3,12 @@ import {validateLecture} from './schema.js';
 export function exportMarkdown(value) {
     const l = validateLecture(value), a = l.analysis;
     const labels = new Map((a.conceptGraph?.nodes ?? []).map(n => [n.id, n.label]));
-    const parts = [`# ${l.title}`, `Date: ${l.createdAt}\nLanguage: ${l.language}\nDuration: ${l.durationMs / 1000} seconds`, `## Summary\n${a.summary}`];
-    for (const s of a.sections ?? []) parts.push(`## Section ${s.id}\n${s.notes}\n\n${s.evidence.map(e => `> ${e.sourceId}: ${e.quote}`).join('\n')}`);
+    const overrides=new Map((l.personalNotes??[]).map(n=>[n.sectionId,n.text]));
+    const parts = [`# ${l.title}`, `Date: ${l.createdAt}\nLanguage: ${l.language}\nDuration: ${l.durationMs / 1000} seconds`, `## Summary${overrides.has('overview')?' (personally edited)':''}\n${overrides.get('overview')??a.summary}`];
+    for (const s of a.sections ?? []) parts.push(`## Section ${s.id}${overrides.has('section:'+s.id)?' (personally edited)':''}\n${overrides.get('section:'+s.id)??s.notes}\n\n${s.evidence.map(e => `> ${e.sourceId}: ${e.quote}`).join('\n')}`);
+    if(l.annotations?.length)parts.push(`## Personal annotations\n${l.annotations.map(n=>`### ${n.sectionId}\n${n.quote?`Regarding: ${n.quote}\n\n`:''}${n.text}`).join('\n\n')}`);
+    const anchors=new Set(['overview',...(a.sections??[]).map(s=>'section:'+s.id)]);
+    for(const note of l.personalNotes??[])if(!anchors.has(note.sectionId))parts.push(`## Personal note from an earlier section (${note.sectionId})\n${note.text}`);
     parts.push(`## Topics\n${a.topics.map(t => `- ${t}`).join('\n')}`, `## Concepts\n${a.concepts.map(c => `### ${c.term}\n${c.definition}`).join('\n\n')}`,
         `## Flashcards\n${a.flashcards.map(f => `Q: ${f.q}\nA: ${f.a}`).join('\n\n')}`, `## Exam cues\n${a.examSignals.join('\n')}`,
         `## Exam evidence\n${(a.examEvidence ?? []).map(s => `${s.label}\n${s.evidence.map(e => `> ${e.sourceId}: ${e.quote}`).join('\n')}`).join('\n\n')}`,

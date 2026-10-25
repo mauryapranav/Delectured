@@ -20,6 +20,10 @@ import * as store from './store.js';
 import {escapeHTML} from './safe-render.js';
 import {renderLecture, choosePrintLayout} from './report.js';
 import {openLecture, renameLecture} from './lectures.js';
+import {requestLectureTitle} from './rename-dialog.js';
+import {cancelCourseQuestions} from './course-questions.js';
+import {clearCourses} from './course-ui.js';
+import {cleanupPersonalNotes,hasUnsavedPersonalNotes} from './personal-notes.js';
 import {exportMarkdown, exportAnkiCsv, downloadText} from './exports.js';
 import {askLecture} from './chat.js';
 import {initShell, refreshRecent} from './shell.js';
@@ -76,8 +80,9 @@ async function initializeApp() {
         return;
     }
     switchView(new URL(location.href).searchParams.has('capture') ? 'input-section' : 'welcome-section');
-    const busy = () => uploadPreparing || session.busy || Boolean(reportController) || reportActionPending;
-    const shell = initShell({busy});
+    const busy = () => uploadPreparing || session.busy || Boolean(reportController) || reportActionPending || hasUnsavedPersonalNotes();
+    const blocked = () => notice(hasUnsavedPersonalNotes()?'Save or cancel your personal note draft before opening another page.':'Finish or discard the current recording or report before opening another page.');
+    const shell = initShell({busy,blocked});
     // 2. Keys Drawer
     const settings = initKeysDrawer();
     processingFlow = initProcessingFlow({settings:settings.open,
@@ -153,17 +158,18 @@ async function initializeApp() {
     await initRouter({prepare: async url => {
         const commit = await prepareRoute(url);
         return () => {
+            cancelCourseQuestions(); clearCourses(); cleanupPersonalNotes();
             questionController?.abort(); questionController = null;
             document.getElementById('sample-notice').hidden = true;
             document.getElementById('lecture-question').value = '';
             document.getElementById('lecture-answer').textContent = '';
-            for (const id of ['export-md','export-csv','rename-report','regenerate-report','lecture-question']) document.getElementById(id).disabled = false;
+            for (const id of ['export-md','export-csv','rename-report','rename-lecture-visible','regenerate-report','lecture-question']) document.getElementById(id).disabled = false;
             document.querySelectorAll('[data-export],[data-report-action],#lecture-question-form button').forEach(button => button.disabled = false);
             commit();
         };
     }, busy, changed: shell.updateRoute,
         openSettings: settings.open,
-        blocked: () => notice('Finish or discard the current recording or report before opening another page.'),
+        blocked,
         error: error => notice(error.message || 'This page could not be opened. Your current work is still available.'),
     });
 
@@ -195,7 +201,7 @@ async function prepareRoute(url) {
         switchView('result-section');
         document.getElementById('sample-notice').hidden = !demo;
         if (demo) document.getElementById('report-state').textContent = 'Sample lecture';
-        for (const id of ['export-md','export-csv','rename-report','regenerate-report']) document.getElementById(id).disabled = demo;
+        for (const id of ['export-md','export-csv','rename-report','rename-lecture-visible','regenerate-report']) document.getElementById(id).disabled = demo;
         document.querySelectorAll('[data-export],[data-report-action]').forEach(button => {
             button.disabled = document.getElementById(button.dataset.export || button.dataset.reportAction).disabled;
         });
@@ -493,6 +499,7 @@ async function showProcessingError(error, lectureId = currentLectureId, stage = 
 
 
 function initReportControls() {
+    document.getElementById('rename-lecture-visible').addEventListener('click',()=>document.getElementById('rename-report').click());
     const action = (id, fn) => document.getElementById(id)?.addEventListener('click', async () => {
         try {await fn();} catch (error) {if(id==='regenerate-report')await showProcessingError(error);else notice(error.message || 'Operation failed.');}
     });
@@ -501,10 +508,12 @@ function initReportControls() {
     action('export-pdf', choosePrintLayout);
     action('print-report', choosePrintLayout);
     action('rename-report', async () => {
-        const lecture = await openLecture(currentLectureId), title = prompt('Lecture title', lecture.title);
+        if(hasUnsavedPersonalNotes()){notice('Save or cancel your personal note draft before renaming.');return;}
+        const lecture = await openLecture(currentLectureId), title = await requestLectureTitle(lecture.title);
         if (title !== null) {await renameLecture(lecture.id, title); const updated = await openLecture(lecture.id); if (currentLectureId === lecture.id) renderLecture(updated);}
     });
     action('regenerate-report', async () => {
+        if(hasUnsavedPersonalNotes()){notice('Save or cancel your personal note draft before regenerating.');return;}
         if (session.busy || reportController || reportActionPending) {notice('A step is already running. Wait for it to finish.');return;}
         reportActionPending = true;
         try {

@@ -61,3 +61,18 @@ dist/
 app_v2.js
 index_v2.html
 styles_v2.css
+
+# Local planning and assistant session notes (not product documentation)
+/plans/
+/planning/
+/summaries/
+/SESSION_SUMMARY.md
+/TASK_SUMMARY.md
+/HANDOFF.md
+/implementation_plan.md
+/task_plan.md
+/progress.md
+/PLAN.md
+/SUMMARY.md
+/walkthrough.md
+/.gemini/

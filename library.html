@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DeLectured — Your lecture, understood</title>
 <meta name="description" content="Record, revisit and understand your lectures. A private browser library with your choice of AI providers.">
-<link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="folio-polish.css">
+<link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="folio-polish.css"><link rel="stylesheet" href="courses.css">
 <script src="ink-transition.js"></script>
 </head><body>
 <a class="skip-link" href="#main-content">Skip to content</a>
@@ -28,6 +28,7 @@
 <div class="library-toolbar"><label for="library-search" class="sr-only">Search title, transcript or summary</label><input id="library-search" type="search" placeholder="Search your lectures…"><button id="export-library-btn">Back up Library</button><button id="import-library-btn">Import backup</button><input type="file" id="import-input" hidden accept=".json"></div>
 <div class="import-policy"><label for="import-conflicts">When importing existing lectures</label><select id="import-conflicts"><option value="reject">Keep existing — reject conflicts</option><option value="overwrite">Replace matching saved lectures</option></select></div>
 <table class="ledger-table"><caption class="sr-only">Saved lectures</caption><thead><tr><th scope="col">Date</th><th scope="col">Lecture</th><th scope="col">Actions</th></tr></thead><tbody id="library-list"></tbody></table><p class="privacy-note">Saved in this browser. Export a backup before clearing site data or switching devices.</p>
+<section id="library-courses" class="courses-section" aria-label="Courses"></section>
 </section></main><nav class="mobile-nav" aria-label="Main navigation"><a href="index.html?capture=1"><span data-icon="mic" aria-hidden="true"></span>Capture</a><a href="library.html"><span data-icon="library" aria-hidden="true"></span>Library</a><a href="index.html?settings=1"><span data-icon="settings" aria-hidden="true"></span>Settings</a></nav>
 <div id="app-notice" role="status" class="app-notice" hidden></div>
 <script type="module" src="js/library.js"></script></body></html>

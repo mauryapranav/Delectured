@@ -1,0 +1,18 @@
+.personal-toolbar,.personal-editor { margin:16px 0; padding:12px; border:1px solid var(--line); }
+.personal-controls button { padding:8px 10px; margin:4px 8px 4px 0; border:1px solid var(--line); border-radius:4px; font:12px/1.4 var(--font-sans); }
+.personal-editor label { display:block; margin:10px 0; }
+.personal-editor textarea,.personal-editor select { display:block; box-sizing:border-box; width:100%; max-width:100%; margin-top:6px; padding:10px; background:var(--paper); color:var(--ink); border:1px solid var(--line); font:inherit; }
+.personal-editor textarea { resize:vertical; }
+.personal-annotation { display:block; position:static; width:auto; max-width:36rem; margin:14px 0; padding:12px 16px; border-inline-start:3px solid var(--accent); background:var(--accent-soft); overflow-wrap:anywhere; }
+.personal-label { display:block; font-size:12px; font-weight:600; }
+.personal-writing { white-space:pre-wrap; overflow-wrap:anywhere; font-size:15px; line-height:1.6; }
+.personal-arrow { font-size:24px; color:var(--accent); }
+.personal-anchor-quote { font-size:12px; margin:8px 0; padding:0 8px; opacity:.8; max-height:6em; overflow:auto; }
+.personal-unplaced { border-top:1px solid var(--line); margin-top:24px; }
+.personal-placement .note-section > div:not(.personal-controls),.personal-placement #note-overview > div { cursor:crosshair; outline:1px dashed var(--ink); outline-offset:3px; }
+@media print {
+    .personal-controls { display:none!important; }
+    .personal-annotation,.personal-unplaced { display:block; position:static!important; break-inside:avoid; }
+    .personal-anchor-quote { max-height:none; overflow:visible; }
+    .personal-unplaced[hidden] { display:none!important; }
+}

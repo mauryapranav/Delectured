@@ -3,6 +3,8 @@ import {PROVIDER_IDS} from './providers/catalog.js';
 import {validateStudyFields, validateCheckpoint} from './analysis-schema.js';
 import {validateProcessingIssue} from './processing-flow.js';
 import {validateUsage} from './request-budget.js';
+import {validateCourseMemberships,validateRevisionProgress} from './courses.js';
+import {validatePersonalNotes,validateAnnotations} from './personal-notes-data.js';
 export const SCHEMA_VERSION = 2;
 export const LANGUAGES = ['en', 'hi', 'hi-en'];
 export const LECTURE_STATES = ['recording', 'processing', 'ready', 'interrupted', 'failed'];
@@ -100,6 +102,10 @@ export function validateLecture(value, now = new Date().toISOString()) {
         ...(value.analysisCheckpoint ? {analysisCheckpoint: validateCheckpoint(value.analysisCheckpoint)} : {}),
         ...(value.notesUsage ? {notesUsage:validateUsage(value.notesUsage)} : {}),
         ...(value.audioUsage !== undefined ? {audioUsage:validateAudioUsage(value.audioUsage)} : {}),
+        ...(value.courseMemberships !== undefined ? {courseMemberships:validateCourseMemberships(value.courseMemberships)} : {}),
+        ...(value.revisionProgress !== undefined ? {revisionProgress:validateRevisionProgress(value.revisionProgress)} : {}),
+        ...(value.personalNotes !== undefined ? {personalNotes:validatePersonalNotes(value.personalNotes)} : {}),
+        ...(value.annotations !== undefined ? {annotations:validateAnnotations(value.annotations)} : {}),
         ...(typeof value.includeExtras==='boolean' ? {includeExtras:value.includeExtras} : {}),
         ...(value.uploadSource ? {uploadSource: validateUploadSource(value.uploadSource)} : {}),
         ...(value.processingIssue ? {processingIssue: validateProcessingIssue(value.processingIssue)} : {}),

@@ -2,6 +2,7 @@
 import { openDB } from './vendor/idb/index.js';
 import { validateLecture, validateChunk, validateSegments } from './schema.js';
 import {throwIfAborted} from './providers/http.js';
+import {validateCourseMemberships, validateRevisionProgress, recallKey} from './courses.js';
 
 /** All mutations settle after commit. Never await network requests inside a transaction. */
 export function createLectureStore(name = 'DeLecturedDB') {
@@ -110,6 +111,56 @@ export function createLectureStore(name = 'DeLecturedDB') {
             return readLecture(lecture);
         }, signal);
     }
+    async function updatePersonalStudy(id, patch, expected) {
+        return write(['lectures'], async tx => {
+            const current = await tx.store.get(id);
+            if (!current || current.status !== 'ready' || current.analysisStatus !== 'ready') throw new Error('Personal study requires completed lecture notes.');
+            if (expected && ['personalNotes','annotations'].some(key => JSON.stringify(current[key] ?? []) !== JSON.stringify(expected[key] ?? []))) {
+                throw new Error('Personal notes changed in another tab. Copy your draft, then reopen this lecture before saving.');
+            }
+            const fields = {};
+            for (const key of ['personalNotes','annotations']) if (Object.hasOwn(patch,key)) fields[key] = patch[key];
+            const lecture = validateLecture({...current,...fields,updatedAt:new Date().toISOString()});
+            await tx.store.put(lecture); return readLecture(lecture);
+        });
+    }
+    async function saveCourse({id, title, lectureIds}) {
+        const [membership] = validateCourseMemberships([{id, title}]);
+        if (!Array.isArray(lectureIds) || !lectureIds.length || lectureIds.some(id => typeof id !== 'string')) throw new TypeError('Select at least one lecture.');
+        const selected = new Set(lectureIds);
+        return write(['lectures'], async tx => {
+            const all = await tx.store.getAll();
+            if ([...selected].some(id => !all.some(l => l.id === id && l.status === 'ready'))) throw new Error('Selected lectures must exist and be ready.');
+            for (const current of all) {
+                const memberships = (current.courseMemberships ?? []).filter(m => m.id !== membership.id);
+                if (selected.has(current.id)) memberships.push(membership);
+                if (selected.has(current.id) || memberships.length !== (current.courseMemberships ?? []).length) {
+                    await tx.store.put(validateLecture({...current, courseMemberships: memberships, updatedAt:new Date().toISOString()}));
+                }
+            }
+        });
+    }
+    async function deleteCourse(id) {
+        await write(['lectures'], async tx => {
+            for (const current of await tx.store.getAll()) {
+                const memberships = (current.courseMemberships ?? []).filter(m => m.id !== id);
+                if (memberships.length !== (current.courseMemberships ?? []).length) await tx.store.put(validateLecture({...current, courseMemberships:memberships, updatedAt:new Date().toISOString()}));
+            }
+        });
+    }
+    async function rateRecall(id, key, rating) {
+        validateRevisionProgress([{key,rating}]);
+        return write(['lectures'], async tx => {
+            const current = await tx.store.get(id);
+            if (!current) throw new Error('Lecture no longer exists.');
+            const validKeys = new Set((current.analysis?.flashcards ?? []).map(recallKey));
+            if (!validKeys.has(key)) throw new Error('This recall question has changed. Reopen revision.');
+            const progress = (current.revisionProgress ?? []).filter(p => p.key !== key && validKeys.has(p.key)).slice(-999);
+            progress.push({key,rating});
+            const lecture = validateLecture({...current, revisionProgress:progress, updatedAt:new Date().toISOString()});
+            await tx.store.put(lecture); return readLecture(lecture);
+        });
+    }
     async function removeChunks(tx, lectureId) {
         let cursor = await tx.objectStore('chunks').index('lectureId').openCursor(lectureId);
         while (cursor) { await cursor.delete(); cursor = await cursor.continue(); }
@@ -192,11 +243,11 @@ export function createLectureStore(name = 'DeLecturedDB') {
             }
         });
     }
-    return {saveLecture, getLecture, getAllLectures, getUnreadableLectures, updateLecture, deleteLecture, putChunk, saveChunk,
+    return {updatePersonalStudy, saveCourse, deleteCourse, rateRecall, saveLecture, getLecture, getAllLectures, getUnreadableLectures, updateLecture, deleteLecture, putChunk, saveChunk,
         getAllChunks, getPendingChunks, completeChunk, deleteChunk, deleteChunksForLecture, recoverLecture, importLectures, close};
 }
 const defaultStore = createLectureStore();
-export const {saveLecture, getLecture, getAllLectures, getUnreadableLectures, updateLecture, deleteLecture, putChunk, saveChunk,
+export const {updatePersonalStudy, saveCourse, deleteCourse, rateRecall, saveLecture, getLecture, getAllLectures, getUnreadableLectures, updateLecture, deleteLecture, putChunk, saveChunk,
     getAllChunks, getPendingChunks, completeChunk, deleteChunk, deleteChunksForLecture, recoverLecture, importLectures} = defaultStore;
 export async function requestPersistentStorage() {
     const storage = globalThis.navigator?.storage;

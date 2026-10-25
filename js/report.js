@@ -2,6 +2,7 @@ import {sectionAnnotation} from './notes-annotations.js';
 import {renderMarkdown} from './safe-render.js';
 import {refreshRecent} from './shell.js';
 import {refreshSelects} from './select-control.js';
+import {mountPersonalNotes, cleanupPersonalNotes} from './personal-notes.js';
 let observer, initialized = false, activeTab = 'notes', currentData;
 const el = id => document.getElementById(id);
 const make = (tag, text, cls) => {const node=document.createElement(tag); if(text!==undefined)node.textContent=text; if(cls)node.className=cls; return node;};
@@ -75,6 +76,7 @@ function navigation(sections) {
     sections.forEach(([id])=>observer.observe(el(id)));mark(sections[0][0]);
 }
 export function renderResults(data) {
+    cleanupPersonalNotes();
     init();currentData=data;
     for(const key of ['clarity','density','pace'])el(`score-${key}`).textContent=data.scores?.[key]??'--';
     const notes=el('summary-content');notes.replaceChildren();
@@ -169,7 +171,7 @@ export function renderLecture(lecture) {
     el('lecture-context').textContent=({en:'English',hi:'Hindi','hi-en':'Hinglish'})[lecture.language] || 'Lecture notes';
     el('transcript-content').textContent=lecture.transcript||'No transcript is saved.';
     el('capture-gap-warning').textContent=lecture.captureGaps?.length?'This recording contains a capture gap. Missing audio cannot be reconstructed.':'';
-    renderResults(lecture.analysis);refreshRecent(lecture.id);
+    renderResults(lecture.analysis);mountPersonalNotes(lecture);refreshRecent(lecture.id);
     el('report-usage')?.remove();
     if(lecture.notesUsage){
         const usage=lecture.notesUsage,details=make('details',undefined,'report-usage');details.id='report-usage';

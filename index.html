@@ -2,9 +2,9 @@
 <html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DeLectured — Your lecture, understood</title>
+<title>DeLectured — Every lecture, every word, structured.</title>
 <meta name="description" content="Record, revisit and understand your lectures. A private browser library with your choice of AI providers.">
-<link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="folio-polish.css">
+<link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="folio-polish.css"><link rel="stylesheet" href="courses.css"><link rel="stylesheet" href="personal-notes.css">
 <script src="ink-transition.js"></script>
 </head><body>
 <a class="skip-link" href="#main-content">Skip to content</a>
@@ -33,7 +33,7 @@
 <section id="welcome-section" class="welcome-section active-view" aria-labelledby="welcome-title">
     <div class="welcome-opening">
     <div class="welcome-hero">
-        <div><p class="eyebrow">Your lecture, understood</p><h1 id="welcome-title"><em>Every Lecture.<br>Every Word.<br>Structured.</em></h1>
+        <div><p class="eyebrow">DeLectured</p><h1 id="welcome-title"><em>Every lecture,<br>every word,<br>structured.</em></h1>
         <p class="welcome-intro">DeLectured turns recorded lectures into a transcript, detailed study notes, connected ideas and recall questions. A quiet place to make sense of what you learned.</p>
         <div class="welcome-actions"><a class="primary-action-btn" href="index.html?capture=1">Start a lecture <span data-icon="arrow" aria-hidden="true"></span></a><button data-open-settings>Set up your API key</button></div>
         <p id="setup-status" class="setup-status" role="status"></p><a class="text-link" href="#getting-started">New here? Begin with the three steps below ↓</a><a class="sample-link text-link" href="index.html?demo=folio">Explore a sample lecture ↗</a></div>
@@ -75,7 +75,7 @@
     <details class="transcript-preview"><summary>Transcript preview</summary><p class="quiet">Completed transcript sections appear here. Unfinished audio may be lost if this tab closes.</p><div id="live-transcript">Waiting for the first completed section.</div></details>
 </section>
 <section id="result-section" class="result-section hidden-view" aria-label="Saved lecture"><div id="sample-notice" class="sample-banner" hidden>Sample lecture · Illustrative notes and timings, not a saved recording.<a href="index.html?capture=1">Record your own lecture ↗</a></div><a class="back-library" href="library.html">← <span>Back to library</span></a>
-    <div class="journal-title-block"><div class="title-area"><h1 id="lecture-heading" class="lecture-heading">Lecture</h1><input id="lecture-title" value="Lecture" type="hidden"><div class="lecture-meta"><span id="report-state">Saved lecture</span><span id="lecture-date"></span><span id="lecture-duration"></span><span id="lecture-context"></span></div></div><div class="journal-actions"><details class="export-menu" id="export-menu"><summary><span data-icon="export" aria-hidden="true"></span> Export <span data-icon="chevron" aria-hidden="true"></span></summary><div class="export-options"><button data-export="export-pdf">Save as PDF</button><button data-export="export-md">Markdown</button><button data-export="export-csv">Anki CSV</button><button data-export="print-report">Print</button></div></details><details class="report-menu"><summary aria-label="More lecture actions">⋮</summary><div class="export-options"><button data-report-action="rename-report">Rename lecture</button><button data-report-action="regenerate-report">Regenerate notes</button></div></details></div></div>
+    <div class="journal-title-block"><div class="title-area"><h1 id="lecture-heading" class="lecture-heading">Lecture</h1><button id="rename-lecture-visible" class="text-link" type="button">Rename lecture</button><input id="lecture-title" value="Lecture" type="hidden"><div class="lecture-meta"><span id="report-state">Saved lecture</span><span id="lecture-date"></span><span id="lecture-duration"></span><span id="lecture-context"></span></div></div><div class="journal-actions"><details class="export-menu" id="export-menu"><summary><span data-icon="export" aria-hidden="true"></span> Export <span data-icon="chevron" aria-hidden="true"></span></summary><div class="export-options"><button data-export="export-pdf">Save as PDF</button><button data-export="export-md">Markdown</button><button data-export="export-csv">Anki CSV</button><button data-export="print-report">Print</button></div></details><details class="report-menu"><summary aria-label="More lecture actions">⋮</summary><div class="export-options"><button data-report-action="rename-report">Rename lecture</button><button data-report-action="regenerate-report">Regenerate notes</button></div></details></div></div>
     <nav id="topic-timeline" class="topic-timeline" aria-label="Lecture sections"></nav>
     <div class="study-tabs" role="tablist" aria-label="Study views"><button id="tab-notes" role="tab" aria-selected="true" aria-controls="panel-notes" data-tab="notes">Notes</button><button id="tab-transcript" role="tab" aria-selected="false" aria-controls="panel-transcript" tabindex="-1" data-tab="transcript">Transcript</button><button id="tab-connections" role="tab" aria-selected="false" aria-controls="panel-connections" tabindex="-1" data-tab="connections">Connections</button><button id="tab-recall" role="tab" aria-selected="false" aria-controls="panel-recall" tabindex="-1" data-tab="recall">Recall</button></div>
     <label class="mobile-contents">On this page <select id="contents-select" aria-label="Jump to section"></select></label>

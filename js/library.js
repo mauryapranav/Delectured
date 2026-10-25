@@ -8,6 +8,8 @@ import * as store from './store.js';
 import { escapeHTML } from './safe-render.js';
 import {downloadText} from './exports.js';
 import {searchLectures, renameLecture, exportLibraryData, importLibraryData } from './lectures.js';
+import {renderCourses} from './course-ui.js';
+import {requestLectureTitle} from './rename-dialog.js';
 
 let initialized = false;
 export function initLibrary() {
@@ -34,6 +36,8 @@ async function loadLibrary() {
     listEl.innerHTML = '<tr><td colspan="3">Loading...</td></tr>';
 
     try {
+        const courses = document.getElementById('library-courses');
+        if (courses) await renderCourses(courses);
         const lectures = await searchLectures(document.getElementById('library-search').value);
         if (version !== loadVersion) return;
         if (lectures.length === 0) {
@@ -67,7 +71,7 @@ async function loadLibrary() {
                 try {
                     if (e.target.dataset.action === 'delete' && confirm('Delete this lecture forever?')) await store.deleteLecture(id);
                     if (e.target.dataset.action === 'rename') {
-                        const title = prompt('Lecture title', lectures.find(l => l.id === id).title);
+                        const title = await requestLectureTitle(lectures.find(l => l.id === id).title);
                         if (title !== null) await renameLecture(id, title);
                     }
                     await loadLibrary(); refreshRecent();
