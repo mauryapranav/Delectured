@@ -21,15 +21,19 @@ Turn lecture recordings into a study workspace: transcripts, structured notes, c
 
 This README describes the current repository. The public site reflects the latest deployed commit, so local changes appear there only after deployment.
 
-## Four reading styles
+## Design and interface
 
-Choose **Paper** for a textured, serif reading surface or **Modern** for clean surfaces and blue accents. Light and dark modes work independently of that choice. Appearance preferences are saved locally, and reduced-motion preferences are respected.
+A floating glass navigation capsule, translucent capture panels and a textured, moving backdrop give the workspace depth. The landing page includes a scroll-driven study canvas that also responds to dragging and arrow keys. Reduced-motion preferences are respected.
 
-[![Four views of the same sample lecture: Classic Light and Classic Dark above Modern Light and Modern Dark](assets/readme/design-modes.jpg)](assets/readme/design-modes.jpg)
+Choose **Tide**, **Moss** or **Ember** in Settings. Each palette changes backgrounds, reading surfaces, text, borders and complementary colours across the workspace. Light and dark mode remain independent, and appearance preferences are saved locally.
 
-*Actual screenshots of the public sample lecture, captured on 26 October 2026. Click the image to enlarge it. No personal recordings or API keys are shown.*
+| Landing · light | Landing · dark |
+| --- | --- |
+| [![Light landing page with teal and peach glass styling](assets/readme/landing-light.png)](assets/readme/landing-light.png) | [![Dark landing page with floating glass navigation](assets/readme/landing-dark.png)](assets/readme/landing-dark.png) |
+| **Record or upload** | **Study notes** |
+| [![Record and upload panels in light mode](assets/readme/capture-light.png)](assets/readme/capture-light.png) | [![Sample lecture notes in the redesigned workspace](assets/readme/study-notes.png)](assets/readme/study-notes.png) |
 
-Full-size views: [Classic Light](assets/readme/classic-light.jpg) · [Classic Dark](assets/readme/classic-dark.jpg) · [Modern Light](assets/readme/modern-light.jpg) · [Modern Dark](assets/readme/modern-dark.jpg)
+*Actual screenshots of the local production build, captured on 31 October 2026. Click an image to enlarge it. Study views use the built-in illustrative sample; no personal recordings or API keys are shown. The deployed site updates after the corresponding code is pushed and GitHub Pages finishes deployment.*
 
 ## Start with your own lecture
 
@@ -107,7 +111,7 @@ Implementation: [audio preparation](js/upload.js), [transcription queue](js/queu
 
 ### 3. Study and ask questions
 
-[![Concept connections in the sample lecture, with a visual graph and the lecture question panel](assets/readme/connections.jpg)](assets/readme/connections.jpg)
+[![Concept connections in the sample lecture, with a visual graph and the lecture question panel](assets/readme/connections-current.png)](assets/readme/connections-current.png)
 
 **Lecture Q&A** selects a small set of relevant transcript passages locally before sending them to the notes provider. Answers must cite supplied passages. The model is instructed to decline unsupported questions; it is not a general web-search or outside-knowledge tutor. Word-based retrieval can miss relevant material, and valid quotations do not guarantee a sound interpretation.
 
