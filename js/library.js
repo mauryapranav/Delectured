@@ -1,3 +1,4 @@
+import {buildNoteNetwork, mountNetwork} from './note-network.js';
 import {refreshRecent} from './shell.js';
 import {withNotesLock} from './request-budget.js';
 /**
@@ -40,6 +41,15 @@ async function loadLibrary() {
         if (courses) await renderCourses(courses);
         const lectures = await searchLectures(document.getElementById('library-search').value);
         if (version !== loadVersion) return;
+        const graphHost = document.getElementById('library-network');
+        if (graphHost) {
+            const network = buildNoteNetwork(lectures);
+            mountNetwork(graphHost, network, {onSelect:node=>{const link=document.createElement('a');link.href=`index.html?lecture=${encodeURIComponent(node.id)}`;link.click();}});
+            const list = document.getElementById('library-network-list');list.replaceChildren();
+            for(const edge of network.edges) {const p=document.createElement('p');const names=new Map(network.nodes.map(n=>[n.id,n.label]));p.textContent=`${names.get(edge.from)} / ${names.get(edge.to)}: ${edge.relation}`;list.append(p);}
+            if(!network.edges.length) list.textContent='No shared concept names or courses found yet. Notes remain separate until they have a connection.';
+            if(lectures.length>60){const p=document.createElement('p');p.textContent='Map shows the first 60 matching lectures. Search to narrow the map.';graphHost.append(p);}
+        }
         if (lectures.length === 0) {
             listEl.innerHTML = '<tr><td colspan="3">No lectures found.</td></tr>';
             return;

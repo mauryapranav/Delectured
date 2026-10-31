@@ -1,3 +1,4 @@
+import {layoutNetwork} from './note-network.js';
 import {sectionAnnotation} from './notes-annotations.js';
 import {renderMarkdown} from './safe-render.js';
 import {refreshRecent} from './shell.js';
@@ -136,10 +137,8 @@ function renderGraph(data, selectedId) {
     refreshSelects(document.querySelector('.graph-picker'));
     const related=edges.filter(e=>e.from===selected.id||e.to===selected.id), ids=new Set(related.flatMap(e=>[e.from,e.to]));ids.delete(selected.id);
     const neighbors=nodes.filter(n=>n.id!==selected.id&&(nodes.length<=7||ids.has(n.id))).slice(0,6), shown=[selected,...neighbors];const labels=new Map(nodes.map(n=>[n.id,n.label]));
-    const mobile=matchMedia('(max-width: 660px)').matches, width=mobile?340:700, height=mobile?Math.max(230,140+neighbors.length*110):440;
-    const coords=new Map([[selected.id,{x:width/2,y:mobile?45:220}]]);
-    neighbors.forEach((n,i)=>{const angle=-Math.PI/2+i*2*Math.PI/Math.max(neighbors.length,1);coords.set(n.id,mobile?{x:width/2+35,y:145+i*110}:{x:350+240*Math.cos(angle),y:220+155*Math.sin(angle)});});
-    if(!mobile&&nodes.length<=7)nodes.forEach((n,i)=>{const angle=-Math.PI/2+i*2*Math.PI/nodes.length;coords.set(n.id,{x:350+250*Math.cos(angle),y:220+175*Math.sin(angle)});});
+    const mobile=false, width=700, height=480;
+    const coords=layoutNetwork(shown,edges,width,height);
     const ns='http://www.w3.org/2000/svg', svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox',`0 0 ${width} ${height}`);svg.classList.add('concept-svg');svg.setAttribute('role','group');svg.setAttribute('aria-label','Concept relationships. Select a concept for its explanation.');
     const defs=document.createElementNS(ns,'defs'), marker=document.createElementNS(ns,'marker');marker.id='graph-arrow';marker.setAttribute('viewBox','0 0 10 10');marker.setAttribute('refX','9');marker.setAttribute('refY','5');marker.setAttribute('markerWidth','6');marker.setAttribute('markerHeight','6');marker.setAttribute('orient','auto-start-reverse');const arrow=document.createElementNS(ns,'path');arrow.setAttribute('d','M 0 0 L 10 5 L 0 10 z');arrow.setAttribute('fill','var(--muted)');marker.append(arrow);defs.append(marker);svg.append(defs);
     for(const edge of edges.filter(e=>e.from!==e.to&&coords.has(e.from)&&coords.has(e.to))) {

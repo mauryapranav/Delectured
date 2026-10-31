@@ -29,23 +29,23 @@ export function initShell({busy = () => false, blocked = () => notice('Finish or
     const media = matchMedia('(max-width: 900px)'), toggle = document.getElementById('sidebar-toggle'), sidebar = document.getElementById('app-sidebar');
     const scrim = document.getElementById('sidebar-scrim');
     function sync() {
-        const open = media.matches ? document.body.classList.contains('sidebar-open') : !document.body.classList.contains('sidebar-collapsed');
+        const open = document.body.classList.contains('sidebar-open');
         toggle?.setAttribute('aria-expanded', String(open)); if (sidebar) sidebar.inert = !open;
-        if (scrim) scrim.hidden = !media.matches || !open;
-        const modal = media.matches && open;
+        if (scrim) scrim.hidden = !open;
+        const modal = open;
         document.querySelectorAll('main, .masthead, .mobile-nav').forEach(node => {node.inert = modal;});
         if (modal) {sidebar.setAttribute('role', 'dialog'); sidebar.setAttribute('aria-modal', 'true');}
         else {sidebar?.removeAttribute('role'); sidebar?.removeAttribute('aria-modal');}
     }
     toggle?.addEventListener('click', () => {
-        document.body.classList.toggle(media.matches ? 'sidebar-open' : 'sidebar-collapsed'); sync();
-        if (media.matches && document.body.classList.contains('sidebar-open')) document.getElementById('sidebar-close').focus();
+        document.body.classList.toggle('sidebar-open'); sync();
+        if (document.body.classList.contains('sidebar-open')) document.getElementById('sidebar-close').focus();
     });
-    const close = () => {document.body.classList.remove('sidebar-open'); if (!media.matches) document.body.classList.add('sidebar-collapsed'); sync(); toggle?.focus();};
+    const close = () => {document.body.classList.remove('sidebar-open'); sync(); toggle?.focus();};
     document.getElementById('sidebar-close')?.addEventListener('click', close); scrim?.addEventListener('click', close);
     document.addEventListener('keydown', e => {if (e.key === 'Escape' && document.body.classList.contains('sidebar-open')) close();});
     sidebar?.addEventListener('keydown', e => {
-        if (e.key !== 'Tab' || !media.matches || !document.body.classList.contains('sidebar-open')) return;
+        if (e.key !== 'Tab' || !document.body.classList.contains('sidebar-open')) return;
         const items = [...sidebar.querySelectorAll('a[href], button')], first = items[0], last = items.at(-1);
         if (e.shiftKey && document.activeElement === first) {e.preventDefault(); last.focus();}
         else if (!e.shiftKey && document.activeElement === last) {e.preventDefault(); first.focus();}
